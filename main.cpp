@@ -104,6 +104,7 @@ struct Player {
   std::string state = "skate";
   int frame = 1;
   bool tricks = false;
+  int score = 0;
 
   void Update(SDL_Renderer *renderer, const std::vector<Platform> platforms, Controller port) {
     std::string path = "./Assets/kenny/" + std::string(state) + std::to_string(frame) + ".png";
@@ -112,7 +113,7 @@ struct Player {
     SDL_RenderTexture(renderer, texture, nullptr, &rect);
     rect.y -= y_vel;
     
-    for (auto& platform : platforms) {
+    for (auto &platform : platforms) {
       if (rect.x + rect.w > platform.rect.x && rect.x < platform.rect.x + platform.rect.w && rect.y + rect.h > platform.rect.y && rect.y < platform.rect.y + platform.rect.h) {
         on_ground = true;
         rect.y = platform.rect.y - rect.h;
@@ -150,6 +151,7 @@ struct Main{
   std::vector<SDL_FPoint> star_points;
   std::vector<Building> buildings;
   float building_timer = 50.0;
+  float score_obtain_timer = 30.0;
   short int gamestate = 0;
   Player kenny;
   std::vector<Platform> platforms;
@@ -231,12 +233,7 @@ struct Main{
     SDL_RenderDebugText(renderer, 60.0f, 120.0f, "Push START");
     SDL_SetRenderScale(renderer, 1.0f, 1.0f);
 
-    if (port1.Start) {
-      gamestate = 1;
-      for (int i = 0; i < 10; i++) {
-        platforms.emplace_back("block", 150 + (i * 200), 300);
-      }
-    }
+    if (port1.Start) startGame();
   }
 
   void Gameplay(){
@@ -254,6 +251,42 @@ struct Main{
       kenny.rect.y = 32.0f;
       kenny.y_vel = 0.0f;
       platforms.clear();
+    }
+    if (kenny.rect.y > height) {
+      SDL_SetRenderDrawColor(renderer, 255, 255, 255, 255);
+      SDL_SetRenderScale(renderer, 2.5f, 2.5f);
+      SDL_RenderDebugText(renderer, 60.0f, 40.0f, "Game Over!");
+      SDL_SetRenderScale(renderer, 2.0f, 2.0f);
+        SDL_RenderDebugText(renderer, 60.0f, 100.0f, "Push A to restart");
+        SDL_RenderDebugText(renderer, 50.0f, 140.0f, "Push START to return");
+      SDL_SetRenderScale(renderer, 1.0f, 1.0f);
+      if (port1.A) startGame();
+    }
+    else {
+      std::string scoreString = "Score: " + std::to_string(kenny.score);
+      SDL_SetRenderScale(renderer, 1.8f, 1.8f);
+      SDL_RenderDebugText(renderer, 1.0f, 1.0f, scoreString.c_str());
+      SDL_SetRenderScale(renderer, 1.0f, 1.0f);
+      score_obtain_timer -= 0.5;
+      if (score_obtain_timer < 0) {
+        kenny.score ++;
+        score_obtain_timer = 30.0;
+      }
+    }
+  }
+
+  void startGame() {
+    kenny.rect.x = 32.0f;
+    kenny.rect.y = 32.0f;
+    kenny.y_vel = 0.0f;
+    kenny.score = 0;
+    platforms.clear();
+    gamestate = 1;
+    for (int i = 0; i < 10; i++) {
+      platforms.emplace_back("block", 150 + (i * 200), 300);
+    }
+    for (int i = 0; i < 5; i++) {
+      platforms.emplace_back("platform", 200 + (i * 400), 250);
     }
   }
 
