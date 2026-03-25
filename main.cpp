@@ -6,7 +6,7 @@
 #include <vector>
 #include <algorithm>
 
-
+int a;
 
 
 // -2147483647 - 2147483647
@@ -80,7 +80,6 @@ struct Platform{
   std::string type;
   std::string path;
   SDL_Surface *surface;
-  SDL_Texture *texture;
 
   Platform(std::string platform_type, int x_position, int y_position) {
     type = platform_type;
@@ -97,6 +96,25 @@ struct Platform{
 };
 
 
+struct SprayCan{
+  SDL_FRect rect;
+  SDL_Surface *surface;
+  int speed = SDL_rand(3) + 2;
+  bool collected = false;
+
+  SprayCan(int x_position, int y_position) {
+    rect = {.x = (float)x_position, .y = (float)y_position, .w = 32.0f, .h = 32.0f};
+    surface = SDL_LoadPNG("./Assets/spray_can.png");
+  }
+
+  void Update(SDL_Renderer *renderer) {
+    SDL_Texture *texture = SDL_CreateTextureFromSurface(renderer, surface);
+    SDL_RenderTexture(renderer, texture, nullptr, &rect);
+    rect.x -= speed;
+  }
+};
+
+
 struct Player {
   SDL_FRect rect{.x = 32.0f, .y = 32.0f, .w = 32.0f, .h = 32.0f};
   float y_vel = 0.0f;
@@ -105,8 +123,9 @@ struct Player {
   int frame = 1;
   bool tricks = false;
   int score = 0;
+  int spray_cans = 0;
 
-  void Update(SDL_Renderer *renderer, const std::vector<Platform> platforms, Controller port) {
+  void Update(SDL_Renderer *renderer, const std::vector<Platform> platforms, std::vector<SprayCan> &spraycans, Controller port) {
     std::string path = "./Assets/kenny/" + std::string(state) + std::to_string(frame) + ".png";
     SDL_Surface *surface = SDL_LoadPNG(path.c_str());
     SDL_Texture *texture = SDL_CreateTextureFromSurface(renderer, surface);
@@ -126,6 +145,13 @@ struct Player {
 
     if (!on_ground) y_vel -= 0.25;
     else y_vel = 0;
+
+    for (auto &spraycan : spraycans) {
+      if (rect.x + rect.w > spraycan.rect.x && rect.x < spraycan.rect.x + spraycan.rect.w && rect.y + rect.h > spraycan.rect.y && rect.y < spraycan.rect.y + spraycan.rect.h && !spraycan.collected) {
+        spray_cans ++;
+        spraycan.collected = true;
+      }
+    }
 
     if (port.A && on_ground) {
       on_ground = false;
@@ -151,10 +177,12 @@ struct Main{
   std::vector<SDL_FPoint> star_points;
   std::vector<Building> buildings;
   float building_timer = 50.0;
-  float score_obtain_timer = 30.0;
+  int score_obtain_timer = 60;
+  int spraycan_timer = 500;
   short int gamestate = 0;
   Player kenny;
   std::vector<Platform> platforms;
+  std::vector<SprayCan> spraycans;
 
   Main() {
     SDL_Log("Starting game...");
@@ -237,13 +265,20 @@ struct Main{
   }
 
   void Gameplay(){
-    kenny.Update(renderer, platforms, port1);
+    kenny.Update(renderer, platforms, spraycans, port1);
     for (auto& platform : platforms) {
       platform.Update(renderer);
     }
     platforms.erase(std::remove_if(platforms.begin(), platforms.end(),[](const Platform& p) {
       return p.rect.x + p.rect.w < 0;}),
       platforms.end()
+    );
+    for (auto& spraycan : spraycans) {
+      spraycan.Update(renderer);
+    }
+    spraycans.erase(std::remove_if(spraycans.begin(), spraycans.end(),[](const SprayCan& s) {
+      return s.rect.x + s.rect.w < 0 || s.collected;}),
+      spraycans.end()
     );
     if (port1.Back) {
       gamestate = 0;
@@ -252,7 +287,7 @@ struct Main{
       kenny.y_vel = 0.0f;
       platforms.clear();
     }
-    if (kenny.rect.y > height) {
+    if (kenny.rect.y > height) { //When player is dead
       SDL_SetRenderDrawColor(renderer, 255, 255, 255, 255);
       SDL_SetRenderScale(renderer, 2.5f, 2.5f);
       SDL_RenderDebugText(renderer, 60.0f, 40.0f, "Game Over!");
@@ -262,15 +297,30 @@ struct Main{
       SDL_SetRenderScale(renderer, 1.0f, 1.0f);
       if (port1.A) startGame();
     }
-    else {
+    else { // When player is alive
       std::string scoreString = "Score: " + std::to_string(kenny.score);
       SDL_SetRenderScale(renderer, 1.8f, 1.8f);
       SDL_RenderDebugText(renderer, 1.0f, 1.0f, scoreString.c_str());
       SDL_SetRenderScale(renderer, 1.0f, 1.0f);
-      score_obtain_timer -= 0.5;
+
+      SDL_Surface *sc_surface = SDL_LoadPNG("./Assets/spray_can.png");
+      SDL_Texture *sc_texture = SDL_CreateTextureFromSurface(renderer, sc_surface);
+      SDL_FRect dst {.x = 0.0f, .y = 16.0f, .w = 32.0f, .h = 32.0f};
+      SDL_RenderTexture(renderer, sc_texture, nullptr, &dst);
+      std::string scString = "x " + std::to_string(kenny.spray_cans);
+      SDL_SetRenderScale(renderer, 1.8f, 1.8f);
+      SDL_RenderDebugText(renderer, 20.0f, 16.0f, scString.c_str());
+      SDL_SetRenderScale(renderer, 1.0f, 1.0f);
+
+      score_obtain_timer -= 1;
       if (score_obtain_timer < 0) {
         kenny.score ++;
-        score_obtain_timer = 30.0;
+        score_obtain_timer = 60;
+      }
+      spraycan_timer --;
+      if (spraycan_timer < 0) {
+        spraycans.emplace_back(width, SDL_rand(175) + 175);
+        spraycan_timer = 500;
       }
     }
   }
@@ -280,7 +330,9 @@ struct Main{
     kenny.rect.y = 32.0f;
     kenny.y_vel = 0.0f;
     kenny.score = 0;
+    kenny.spray_cans = 0;
     platforms.clear();
+    spraycans.clear();
     gamestate = 1;
     for (int i = 0; i < 10; i++) {
       platforms.emplace_back("block", 150 + (i * 200), 300);
