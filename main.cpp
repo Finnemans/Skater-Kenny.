@@ -14,11 +14,11 @@ int a;
 
 
 void Blit(SDL_Surface* src, SDL_Surface* dst, int x, int y, int w = 0, int h = 0, int sx = 0, int sy = 0, int sw = 0, int sh = 0) {
-    SDL_Rect dest = { x, y, w, h };
-    SDL_Rect srcrect;
-    SDL_Rect* srcPtr = nullptr;
-    if (sw != 0 && sh != 0) {srcrect = {sx, sy, sw, sh}; srcPtr = &srcrect;}
-    SDL_BlitSurface(src, srcPtr, dst, &dest);
+  SDL_Rect dest = {x, y, w, h};
+  SDL_Rect srcrect;
+  SDL_Rect* srcPtr = nullptr;
+  if (sw != 0 && sh != 0) {srcrect = {sx, sy, sw, sh}; srcPtr = &srcrect;}
+  SDL_BlitSurface(src, srcPtr, dst, &dest);
 }
 
 struct Controller{
@@ -87,6 +87,10 @@ struct Platform{
     surface = SDL_LoadPNG(path.c_str());
     rect = {.x = (float)x_position, .y = (float)y_position, .w = (float)surface->w, .h = (float)surface->h};
   }
+  
+  ~Main() {
+    SDL_DestroySurface(surface);
+  }
 
   void Update(SDL_Renderer *renderer) {
     SDL_Texture *texture = SDL_CreateTextureFromSurface(renderer, surface);
@@ -106,6 +110,10 @@ struct SprayCan{
     rect = {.x = (float)x_position, .y = (float)y_position, .w = 32.0f, .h = 32.0f};
     surface = SDL_LoadPNG("./Assets/spray_can.png");
   }
+  
+  ~Main() {
+    SDL_DestroySurface(surface);
+  }
 
   void Update(SDL_Renderer *renderer) {
     SDL_Texture *texture = SDL_CreateTextureFromSurface(renderer, surface);
@@ -121,7 +129,8 @@ struct Player {
   bool on_ground = false;
   std::string state = "skate";
   int frame = 1;
-  bool tricks = false;
+  int frame_timer = 4;
+  bool trick = false;
   int score = 0;
   int spray_cans = 0;
 
@@ -129,13 +138,14 @@ struct Player {
     std::string path = "./Assets/kenny/" + std::string(state) + std::to_string(frame) + ".png";
     SDL_Surface *surface = SDL_LoadPNG(path.c_str());
     SDL_Texture *texture = SDL_CreateTextureFromSurface(renderer, surface);
+    SDL_DestroySurface(surface);
     SDL_RenderTexture(renderer, texture, nullptr, &rect);
     rect.y -= y_vel;
     
     for (auto &platform : platforms) {
       if (rect.x + rect.w > platform.rect.x && rect.x < platform.rect.x + platform.rect.w && rect.y + rect.h > platform.rect.y && rect.y < platform.rect.y + platform.rect.h) {
         on_ground = true;
-        rect.y = platform.rect.y - rect.h;
+        rect.y = platform.rect.y - (rect.h - 1);
         break;
       }
       else {
@@ -143,8 +153,21 @@ struct Player {
       }
     }
 
-    if (!on_ground) y_vel -= 0.25;
-    else y_vel = 0;
+    if (!on_ground) {
+      y_vel -= 0.25;
+      if (!trick) {state = "hop"; frame = 1;}
+      else {
+        frame_timer --;
+        if (frame_timer < 0){
+          frame ++;
+          frame_timer = 4;
+        }
+        if (!SDL_LoadPNG(path.c_str())) {
+          state = "hop"; frame = 1; trick = false;
+        }
+      }
+    }
+    else {y_vel = 0; state = "skate"; frame = 1; trick = false;}
 
     for (auto &spraycan : spraycans) {
       if (rect.x + rect.w > spraycan.rect.x && rect.x < spraycan.rect.x + spraycan.rect.w && rect.y + rect.h > spraycan.rect.y && rect.y < spraycan.rect.y + spraycan.rect.h && !spraycan.collected) {
@@ -157,6 +180,46 @@ struct Player {
       on_ground = false;
       rect.y -= 2;
       y_vel = 5.0f;
+    }
+    if (port.Right && !on_ground && !trick) {
+      trick = true;
+      state = "frontflip";
+    }
+    if (port.Left && !on_ground && !trick) {
+      trick = true;
+      state = "backflip";
+    }
+    if (port.Up && !on_ground && !trick) {
+      trick = true;
+      state = "right_tailwhip";
+    }
+    if (port.Down && !on_ground && !trick) {
+      trick = true;
+      state = "left_tailwhip";
+    }
+    if (port.Right && on_ground && !trick) {
+      trick = true;
+      state = "popshoveit";
+      rect.y -= 2;
+      y_vel = 2.0f;
+    }
+    if (port.Left && on_ground && !trick) {
+      trick = true;
+      state = "ollie";
+      rect.y -= 2;
+      y_vel = 2.0f;
+    }
+    if (port.Up && on_ground && !trick) {
+      trick = true;
+      state = "kickflip";
+      rect.y -= 2;
+      y_vel = 2.0f;
+    }
+    if (port.Down && on_ground && !trick) {
+      trick = true;
+      state = "heelflip";
+      rect.y -= 2;
+      y_vel = 2.0f;
     }
   }
 };
