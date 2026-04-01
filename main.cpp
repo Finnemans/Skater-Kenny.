@@ -1,12 +1,11 @@
 #include <SDL3/SDL.h>
 #include <SDL3/SDL_main.h>
+#include <SDL3_mixer/SDL_mixer.h>
 #include <format>
 #include <string>
 #include <cmath>
 #include <vector>
 #include <algorithm>
-
-int a;
 
 
 // -2147483647 - 2147483647
@@ -87,10 +86,6 @@ struct Platform{
     surface = SDL_LoadPNG(path.c_str());
     rect = {.x = (float)x_position, .y = (float)y_position, .w = (float)surface->w, .h = (float)surface->h};
   }
-  
-  ~Main() {
-    SDL_DestroySurface(surface);
-  }
 
   void Update(SDL_Renderer *renderer) {
     SDL_Texture *texture = SDL_CreateTextureFromSurface(renderer, surface);
@@ -109,10 +104,6 @@ struct SprayCan{
   SprayCan(int x_position, int y_position) {
     rect = {.x = (float)x_position, .y = (float)y_position, .w = 32.0f, .h = 32.0f};
     surface = SDL_LoadPNG("./Assets/spray_can.png");
-  }
-  
-  ~Main() {
-    SDL_DestroySurface(surface);
   }
 
   void Update(SDL_Renderer *renderer) {
@@ -249,6 +240,8 @@ struct Main{
 
   Main() {
     SDL_Log("Starting game...");
+    SDL_SetAppMetadata("Skater KENNY.", "1.0", "com.skater-kenny-2");
+    SDL_SetHint(SDL_HINT_MAIN_CALLBACK_RATE, "5");
     SDL_Init(SDL_INIT_VIDEO);
     window = SDL_CreateWindow("Skater KENNY.", width, height, SDL_WINDOW_RESIZABLE);
     renderer = SDL_CreateRenderer(window, "opengl");
@@ -259,6 +252,17 @@ struct Main{
     }
     s_title = SDL_LoadPNG("./Assets/title.png");
     title = SDL_CreateTextureFromSurface(renderer, s_title);
+
+    char *path = NULL;
+    MIX_Audio *audio = NULL;
+    MIX_Init();
+    MIX_Mixer *mixer = MIX_CreateMixerDevice(SDL_AUDIO_DEVICE_DEFAULT_PLAYBACK, NULL);
+    SDL_asprintf(&path, "./Sounds/tracks/Today's_Your_Shot.mp3", SDL_GetBasePath());
+    audio = MIX_LoadAudio(mixer, path, false);
+    SDL_free(path);
+    MIX_Track *track = MIX_CreateTrack(mixer);
+    MIX_SetTrackAudio(track, audio);
+    MIX_PlayTrack(track, 0);
 
     for (int i = 0; i < 300; i++) {
       SDL_FPoint point{
@@ -276,6 +280,7 @@ struct Main{
   }
 
   ~Main() {
+    //MIX_Quit();
     SDL_DestroyRenderer(renderer);
     SDL_DestroyWindow(window);
     SDL_DestroySurface(s_title);
@@ -397,12 +402,17 @@ struct Main{
     platforms.clear();
     spraycans.clear();
     gamestate = 1;
-    for (int i = 0; i < 10; i++) {
-      platforms.emplace_back("block", 150 + (i * 200), 300);
-    }
+    // for (int i = 0; i < 10; i++) {
+    //   platforms.emplace_back("block", 150 + (i * 200), 300);
+    // }
+    // for (int i = 0; i < 5; i++) {
+    //   platforms.emplace_back("platform", 200 + (i * 400), 250);
+    // }
     for (int i = 0; i < 5; i++) {
-      platforms.emplace_back("platform", 200 + (i * 400), 250);
+      platforms.emplace_back("platform", 150 + (i * 100), 350);
     }
+    platforms.emplace_back("block", 750, 325);
+    platforms.emplace_back("block", 750, 325);
   }
 
   void Events() {
