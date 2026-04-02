@@ -6,6 +6,7 @@
 #include <cmath>
 #include <vector>
 #include <algorithm>
+#include <array>
 
 
 // -2147483647 - 2147483647
@@ -89,6 +90,13 @@ struct Platform{
 
   void Update(SDL_Renderer *renderer) {
     SDL_Texture *texture = SDL_CreateTextureFromSurface(renderer, surface);
+    SDL_SetRenderDrawColor(renderer, 120, 120, 130, 255);
+    if (type == "platform") {
+      for (int i = 3; i < rect.w; i += rect.w / 8) {
+        SDL_FRect pole {.x = (float)(rect.x + i), .y = rect.y, .w = 4.0f, .h = 550.0f};
+        SDL_RenderFillRect(renderer, &pole);
+      }
+    }
     SDL_RenderTexture(renderer, texture, nullptr, &rect);
     rect.x -= 3;
   }
@@ -121,9 +129,11 @@ struct Player {
   std::string state = "skate";
   int frame = 1;
   int frame_timer = 4;
-  bool trick = false;
+  bool trick_active = false;
   int score = 0;
   int spray_cans = 0;
+  int trick_timer = 0;
+  std::string trick = "";
 
   void Update(SDL_Renderer *renderer, const std::vector<Platform> platforms, std::vector<SprayCan> &spraycans, Controller port) {
     std::string path = "./Assets/kenny/" + std::string(state) + std::to_string(frame) + ".png";
@@ -144,21 +154,33 @@ struct Player {
       }
     }
 
+    if (!SDL_LoadPNG(path.c_str()) && trick_active) {
+      score ++;
+      if (state == "frontflip" || state == "backflip" || state == "right_tailwhip" || state == "left_tailwhip") score += 2;
+      trick_timer = 100;
+      state = "hop"; frame = 1; trick_active = false;
+    }
+
     if (!on_ground) {
       y_vel -= 0.25;
-      if (!trick) {state = "hop"; frame = 1;}
+      if (!trick_active) {state = "hop"; frame = 1;}
       else {
         frame_timer --;
         if (frame_timer < 0){
           frame ++;
           frame_timer = 4;
         }
-        if (!SDL_LoadPNG(path.c_str())) {
-          state = "hop"; frame = 1; trick = false;
-        }
       }
     }
-    else {y_vel = 0; state = "skate"; frame = 1; trick = false;}
+    else {y_vel = 0; state = "skate"; frame = 1; trick_active = false;}
+    
+    if (trick_timer >= 10) {
+      trick_timer --;
+      SDL_SetRenderDrawColor(renderer, 255, 50 + (trick_timer / 5), 50 + (trick_timer / 5), 255);
+      SDL_SetRenderScale(renderer, 2.0f, 2.0f);
+      SDL_RenderDebugText(renderer, (float)(60 + trick_timer), 40.0f, trick.c_str());
+      SDL_SetRenderScale(renderer, 1.0f, 1.0f);
+    }
 
     for (auto &spraycan : spraycans) {
       if (rect.x + rect.w > spraycan.rect.x && rect.x < spraycan.rect.x + spraycan.rect.w && rect.y + rect.h > spraycan.rect.y && rect.y < spraycan.rect.y + spraycan.rect.h && !spraycan.collected) {
@@ -172,45 +194,61 @@ struct Player {
       rect.y -= 2;
       y_vel = 5.0f;
     }
-    if (port.Right && !on_ground && !trick) {
-      trick = true;
+    if (port.Right && (!on_ground) && (!trick_active) && state == "hop") {
+      trick_active = true;
+      trick_timer = 0;
       state = "frontflip";
+      trick = "FRONT FLIP! +3";
     }
-    if (port.Left && !on_ground && !trick) {
-      trick = true;
+    if (port.Left && (!on_ground) && (!trick_active) && state == "hop") {
+      trick_active = true;
+      trick_timer = 0;
       state = "backflip";
+      trick = "BACK FLIP! +3";
     }
-    if (port.Up && !on_ground && !trick) {
-      trick = true;
+    if (port.Up && (!on_ground) && (!trick_active) && state == "hop") {
+      trick_active = true;
+      trick_timer = 0;
       state = "right_tailwhip";
+      trick = "RIGHT TAILWHIP! +3";
     }
-    if (port.Down && !on_ground && !trick) {
-      trick = true;
+    if (port.Down && (!on_ground) && (!trick_active) && state == "hop") {
+      trick_active = true;
+      trick_timer = 0;
       state = "left_tailwhip";
+      trick = "LEFT TAILWHIP! +3";
     }
-    if (port.Right && on_ground && !trick) {
-      trick = true;
+    if (port.Right && on_ground && !trick_active) {
+      trick_active = true;
+      trick_timer = 0;
       state = "popshoveit";
       rect.y -= 2;
-      y_vel = 2.0f;
+      y_vel = 4.0f;
+      trick = "POP SHOVE-IT! +1";
     }
-    if (port.Left && on_ground && !trick) {
-      trick = true;
+    if (port.Left && on_ground && !trick_active) {
+      trick_active = true;
+      trick_timer = 0;
       state = "ollie";
       rect.y -= 2;
-      y_vel = 2.0f;
+      y_vel = 4.0f;
+      trick = "OLLIE! +1";
     }
-    if (port.Up && on_ground && !trick) {
-      trick = true;
+    if (port.Up && on_ground && !trick_active) {
+      trick_active = true;
+      trick_timer = 0;
       state = "kickflip";
       rect.y -= 2;
-      y_vel = 2.0f;
+      y_vel = 4.0f;
+      trick = "KICKFLIP! +1";
     }
-    if (port.Down && on_ground && !trick) {
-      trick = true;
+    if (port.Down && on_ground && !trick_active) {
+      trick_active = true;
+      trick_timer = 0;
       state = "heelflip";
       rect.y -= 2;
-      y_vel = 2.0f;
+      y_vel = 4.0f;
+      trick = "HEELFLIP! +1";
     }
   }
 };
@@ -228,12 +266,20 @@ struct Main{
   bool active = true;
   SDL_Surface *s_title;
   SDL_Texture *title;
+  SDL_Surface *s_keikei_art;
+  SDL_Texture *keikei_art;
+  SDL_Surface *s_kenny_and_keikei_skyline;
+  SDL_Texture *kenny_and_keikei_skyline;
   std::vector<SDL_FPoint> star_points;
   std::vector<Building> buildings;
   float building_timer = 50.0;
-  int score_obtain_timer = 60;
-  int spraycan_timer = 500;
+  short int score_obtain_timer = 60;
+  short int spraycan_timer = 500;
   short int gamestate = 0;
+  short int transition_timer = 0;
+  short int transition_release = 0;
+  short int intro_slide = 0;
+  std::array<std::string, 10> intro_texts = {"It was a normal day in Kenny's city, Panpace.", "It's a city of skating and graffiti.", "And Kenny has always been the star of the city.", "One day, somebody took his place from the spotlight...", "It was a mouse, Keikei.", "And Kenny is an ave.", "Everybody turned their gazes away from Kenny!", "Keikei started leaving marks of grafitti all around the vicinity.", "It was time for Kenny to grab hold of his place again!", "- Push START button -"};
   Player kenny;
   std::vector<Platform> platforms;
   std::vector<SprayCan> spraycans;
@@ -252,6 +298,10 @@ struct Main{
     }
     s_title = SDL_LoadPNG("./Assets/title.png");
     title = SDL_CreateTextureFromSurface(renderer, s_title);
+    s_keikei_art = SDL_LoadPNG("./Assets/keikei_art.png");
+    keikei_art = SDL_CreateTextureFromSurface(renderer, s_keikei_art);
+    s_kenny_and_keikei_skyline = SDL_LoadPNG("./Assets/kenny_and_keikei_skyline.png");
+    kenny_and_keikei_skyline = SDL_CreateTextureFromSurface(renderer, s_kenny_and_keikei_skyline);
 
     char *path = NULL;
     MIX_Audio *audio = NULL;
@@ -280,7 +330,7 @@ struct Main{
   }
 
   ~Main() {
-    //MIX_Quit();
+    MIX_Quit();
     SDL_DestroyRenderer(renderer);
     SDL_DestroyWindow(window);
     SDL_DestroySurface(s_title);
@@ -310,7 +360,8 @@ struct Main{
     }
 
     if (gamestate == 0) Menu();
-    if (gamestate == 1) Gameplay();
+    if (gamestate == 1) Introduction();
+    if (gamestate == 2) Gameplay();
 
     SDL_RenderPresent(renderer);
 
@@ -329,7 +380,40 @@ struct Main{
     SDL_RenderDebugText(renderer, 60.0f, 120.0f, "Push START");
     SDL_SetRenderScale(renderer, 1.0f, 1.0f);
 
-    if (port1.Start) startGame();
+    if (port1.Start) transition_release = true;
+
+    for (int i = 0; i < width; i += width / 10) {
+      SDL_SetRenderDrawColor(renderer, 0, 0, 10, 255);
+      SDL_FRect transition_rect {.x = (float)i, .y = 0.0f, .w = (float)(std::clamp(transition_timer - (i / 10), 0, 100)), .h = (float)height};
+      SDL_RenderFillRect(renderer, &transition_rect);
+    }
+    if (transition_release) transition_timer += 2;
+    if (transition_timer > 200) startGame();
+  }
+  
+  void Introduction(){
+    if (intro_slide >= 4 && intro_slide <= 6) SDL_RenderTexture(renderer, keikei_art, nullptr, nullptr);
+    if (intro_slide >= 7 && intro_slide <= 9) SDL_RenderTexture(renderer, kenny_and_keikei_skyline, nullptr, nullptr);
+
+    SDL_SetRenderScale(renderer, 1.0f, 1.5f);
+    if (intro_slide >= 9) SDL_SetRenderScale(renderer, 1.5f, 1.5f);
+    SDL_RenderDebugText(renderer, 1.0f, 10.0f, intro_texts[intro_slide].c_str());
+    SDL_SetRenderScale(renderer, 1.0f, 1.0f);
+    
+    if (port1.Start) {
+      if (intro_slide >= 9) {
+        if (port1.Start) transition_release = true;
+      }
+      else intro_slide ++;
+    }
+
+    for (int i = 0; i < width; i += width / 10) {
+      SDL_SetRenderDrawColor(renderer, 0, 0, 10, 255);
+      SDL_FRect transition_rect {.x = (float)i, .y = 0.0f, .w = (float)(std::clamp(transition_timer - (i / 10), 0, 100)), .h = (float)height};
+      SDL_RenderFillRect(renderer, &transition_rect);
+    }
+    if (transition_release) transition_timer += 2;
+    if (transition_timer > 200) startGame();
   }
 
   void Gameplay(){
@@ -368,6 +452,7 @@ struct Main{
     else { // When player is alive
       std::string scoreString = "Score: " + std::to_string(kenny.score);
       SDL_SetRenderScale(renderer, 1.8f, 1.8f);
+      SDL_SetRenderDrawColor(renderer, 255, 255, 255, 255);
       SDL_RenderDebugText(renderer, 1.0f, 1.0f, scoreString.c_str());
       SDL_SetRenderScale(renderer, 1.0f, 1.0f);
 
@@ -376,6 +461,7 @@ struct Main{
       SDL_FRect dst {.x = 0.0f, .y = 16.0f, .w = 32.0f, .h = 32.0f};
       SDL_RenderTexture(renderer, sc_texture, nullptr, &dst);
       std::string scString = "x " + std::to_string(kenny.spray_cans);
+      SDL_SetRenderDrawColor(renderer, 255, 255, 255, 255);
       SDL_SetRenderScale(renderer, 1.8f, 1.8f);
       SDL_RenderDebugText(renderer, 20.0f, 16.0f, scString.c_str());
       SDL_SetRenderScale(renderer, 1.0f, 1.0f);
@@ -401,7 +487,12 @@ struct Main{
     kenny.spray_cans = 0;
     platforms.clear();
     spraycans.clear();
-    gamestate = 1;
+    if (gamestate == 1) gamestate = 2;
+    if (gamestate == 0) gamestate = 1;
+    transition_release = false;
+    transition_timer = 0;
+    intro_slide = 0;
+    kenny.trick_timer = 0;
     // for (int i = 0; i < 10; i++) {
     //   platforms.emplace_back("block", 150 + (i * 200), 300);
     // }
@@ -412,7 +503,7 @@ struct Main{
       platforms.emplace_back("platform", 150 + (i * 100), 350);
     }
     platforms.emplace_back("block", 750, 325);
-    platforms.emplace_back("block", 750, 325);
+    platforms.emplace_back("block", 950, 350);
   }
 
   void Events() {
