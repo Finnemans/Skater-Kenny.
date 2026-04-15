@@ -633,7 +633,7 @@ struct Main{
     SDL_RenderDebugText(renderer, 1.0f, 10.0f, intro_texts[intro_slide].c_str());
     SDL_SetRenderScale(renderer, 1.0f, 1.0f);
     
-    if (port1.Start || port1.A) {
+    if (port1.Start) {
       if (intro_slide >= 9) {
         if (port1.Start) transition_release = true;
       }
@@ -848,6 +848,7 @@ struct Main{
     //port1.B = false;
     port1.Select = false;
     port1.Start = false;
+    port1.Back = false;
     while (SDL_PollEvent(&event)) {
       if (event.type == SDL_EVENT_QUIT) {
         active = false;
