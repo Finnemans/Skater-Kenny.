@@ -5,22 +5,23 @@
 :: xcopy /Y "C:\Users\creep\Documents\SDL3-devel-3.4.2-mingw\SDL3_mixer-3.2.0\build\SDL3_mixer.dll" .
 
 :: 2. Compile with the -mwindows flag to hide the terminal
+:: Added -O2 for performance and -Wall to see all warnings
 g++.exe main.cpp -o kenny.exe ^
   -I"C:\Users\creep\Documents\SDL3-devel-3.4.2-mingw\SDL3-3.4.2\x86_64-w64-mingw32\include" ^
   -I"C:\Users\creep\Documents\SDL3-devel-3.4.2-mingw\SDL3_mixer-3.2.0\include" ^
   -L"C:\Users\creep\Documents\SDL3-devel-3.4.2-mingw\SDL3-3.4.2\x86_64-w64-mingw32\lib" ^
   -L"C:\Users\creep\Documents\SDL3-devel-3.4.2-mingw\SDL3_mixer-3.2.0\build" ^
   -lSDL3 -lSDL3_mixer ^
-  -mwindows
+  -O2 -Wall
 
 if %errorlevel% neq 0 (
-  echo [!] Build Failed! Check the errors above.
+  echo [!] Build Failed!
   pause
 ) else (
   echo [!] Build Successful! Launching Skater Kenny right away...
-  start kenny.exe
+  kenny.exe
+  pause
 )
-
 
 
 
