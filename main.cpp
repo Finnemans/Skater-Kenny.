@@ -142,7 +142,11 @@ struct Platform{
   std::string type;
   std::string path;
 
-  Platform(std::string platform_type, int x_position, int y_position) {
+  Platform(std::string platform_type, int x_position, int y_position, int movex = 0, int movey = 0) {
+    move_x = movex;
+    move_y = movey;
+    x_lapsed = 0;
+    y_lapsed = 0;
     type = platform_type;
     path = "./Assets/" + type + ".png";
     SDL_Surface* surface = SDL_LoadPNG(path.c_str());
@@ -167,6 +171,22 @@ struct Platform{
     if (type == "building" && rect.x <= 515 - rect.w) finish_reached = true;
     else {
       if (!finish_reached) rect.x -= 3;
+    }
+    if (move_x != 0) {
+      rect.x += 1;
+      x_lapsed += 1;
+      if (x_lapsed >= std::abs(move_x)) {
+        move_x = -move_x;
+        x_lapsed = 0;
+      }
+    }
+    if (move_y != 0) {
+      rect.y += 1;
+      y_lapsed += 1;
+      if (y_lapsed >= std::abs(move_y)) {
+        move_y = -move_y;
+        y_lapsed = 0;
+      }
     }
   }
 };
