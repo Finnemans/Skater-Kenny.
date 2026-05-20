@@ -141,6 +141,10 @@ struct Platform{
   SDL_FRect rect;
   std::string type;
   std::string path;
+  int move_x;
+  int move_y;
+  int x_lapsed;
+  int y_lapsed;
 
   Platform(std::string platform_type, int x_position, int y_position, int movex = 0, int movey = 0) {
     move_x = movex;
@@ -173,7 +177,8 @@ struct Platform{
       if (!finish_reached) rect.x -= 3;
     }
     if (move_x != 0) {
-      rect.x += 1;
+      if (move_x > 0) rect.x ++;
+      else rect.x --;
       x_lapsed += 1;
       if (x_lapsed >= std::abs(move_x)) {
         move_x = -move_x;
@@ -181,7 +186,8 @@ struct Platform{
       }
     }
     if (move_y != 0) {
-      rect.y += 1;
+      if (move_y > 0) rect.y ++;
+      else rect.y --;
       y_lapsed += 1;
       if (y_lapsed >= std::abs(move_y)) {
         move_y = -move_y;
