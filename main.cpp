@@ -119,6 +119,24 @@ struct Building{
 };
 
 
+struct Spotlight{
+  SDL_FRect rect;
+  std::string path;
+
+  Spotlight(int screenWidth, int screenHeight, int x_position = 0, bool face_right = true) {
+    rect = {.x = (float)screenWidth, .y = (float)screenHeight - 488, .w = (float)280, .h = (float)488};
+    if (face_right) {path = "./Assets/spotlight_right.png";}
+    else {path = "./Assets/spotlight_left.png";}
+  }
+
+  void Update(SDL_Renderer *renderer, bool finish_reached = false) {
+    SDL_Texture *texture = LoadCachedTexture(renderer, path);
+    SDL_RenderTexture(renderer, texture, nullptr, &rect);
+    if (!finish_reached) rect.x -= 1;
+  }
+};
+
+
 struct Platform{
   SDL_FRect rect;
   std::string type;
@@ -338,7 +356,7 @@ struct Player{
         if (frame >= 44) {
           SDL_SetRenderScale(renderer, 1.5f, 1.5f);
           std::string scString = "Total Time: " + std::to_string(score);
-          SDL_RenderDebugText(renderer, 100.0f, 80.0f, scString.c_str());
+          SDL_RenderDebugText(renderer, 105.0f, 80.0f, scString.c_str());
           SDL_SetRenderScale(renderer, 1.0f, 1.0f);
         }
       }
@@ -482,7 +500,10 @@ struct Main{
   SDL_Texture *kenny_mark;
   std::vector<SDL_FPoint> star_points;
   std::vector<Building> buildings;
+  std::vector<Spotlight> spotlights;
   float building_timer = 50.0;
+  int spotlight_timer = 1000;
+  bool which_spotlight = true;
   int score_obtain_timer = 60;
   int spraycan_timer = 500;
   int cone_timer = 200;
@@ -492,7 +513,7 @@ struct Main{
   int intro_slide = 0;
   int time_lapsed = 0;
   bool finish_reached = false;
-  int level = 1;
+  int level = 2;
   std::array<std::string, 10> intro_texts = {"It was a normal day in Kenny's city, Panpace.", "It's a city of skating and graffiti.", "And Kenny has always been the star of the city.", "One day, somebody took his place from the spotlight...", "It was a mouse, Keikei.", "And Kenny is an ave.", "Everybody turned their gazes away from Kenny!", "Keikei started leaving marks of grafitti all around the vicinity.", "It was time for Kenny to grab hold of his place again!", "- Push START button -"};
   Player kenny;
   std::vector<Platform> platforms;
@@ -508,6 +529,7 @@ struct Main{
     window = SDL_CreateWindow("Skater KENNY.", width, height, SDL_WINDOW_RESIZABLE);
     renderer = SDL_CreateRenderer(window, "opengl"); //nullptr
     SDL_Log("Backend Hardware Accelerated Renderer: %s", SDL_GetRendererName(renderer));
+    SDL_Log("Logical CPU Cores: %d", SDL_GetNumLogicalCPUCores());
     SDL_SetRenderLogicalPresentation(renderer, width, height, SDL_LOGICAL_PRESENTATION_LETTERBOX);
     // for (int i = 0; i < SDL_GetNumRenderDrivers(); i++) {
     //   SDL_Log("%d. %s", i + 1, SDL_GetRenderDriver(i));
@@ -575,6 +597,19 @@ struct Main{
     for (auto& star : star_points) {
       if (!finish_reached) star.x -= 1;
       if (star.x < 0) {star.x = width; star.y = SDL_rand(height);}
+    }
+    for (auto& spotlight : spotlights) {
+      spotlight.Update(renderer, finish_reached);
+    }
+    spotlights.erase(std::remove_if(spotlights.begin(), spotlights.end(),[](const Spotlight& b) {
+      return b.rect.x + b.rect.w < 0;}),
+      spotlights.end()
+    );
+    spotlight_timer -= 1;
+    if (spotlight_timer < 0) {
+      spotlights.emplace_back(width, height, 0, which_spotlight);
+      spotlight_timer = 1000;
+      which_spotlight = !which_spotlight;
     }
     for (auto& building : buildings) {
       building.Update(renderer, finish_reached);
@@ -693,6 +728,7 @@ struct Main{
       kenny.rect.y = 32.0f;
       kenny.y_vel = 0.0f;
       platforms.clear();
+      MIX_StopTrack(track, 1.0f);
       SDL_asprintf(&track_path, "./Sounds/tracks/You_Are_A_Hit.mp3");
       audio = MIX_LoadAudio(mixer, track_path, false);
       SDL_free(track_path);
@@ -841,6 +877,52 @@ struct Main{
       if (SDL_rand(2) == 1) cones.emplace_back(4750 + 85 + x_offset, 225 - 12);
       platforms.emplace_back("platform", 4950 + x_offset, 200);
     }
+    else if (level == 2) {
+      for (int i = 0; i < 5; i++) {
+        platforms.emplace_back("platform", 150 + (i * 100) + x_offset, 360);
+      }
+
+      platforms.emplace_back("platform", 700 + x_offset, 340);
+      platforms.emplace_back("platform", 900 + x_offset, 360);
+
+      platforms.emplace_back("block", 1050 + x_offset, 350);
+      if (SDL_rand(2) == 1) cones.emplace_back(1050 + x_offset, 350 - 12);
+
+      platforms.emplace_back("block", 1200 + x_offset, 330);
+      platforms.emplace_back("block", 1300 + x_offset, 300);
+      platforms.emplace_back("block", 1400 + x_offset, 270);
+
+      platforms.emplace_back("platform", 1550 + x_offset, 290);
+
+      platforms.emplace_back("rail", 1700 + x_offset, 260);
+      platforms.emplace_back("rail", 1950 + x_offset, 300);
+
+      platforms.emplace_back("platform", 2200 + x_offset, 340);
+      platforms.emplace_back("platform", 2400 + x_offset, 310);
+      platforms.emplace_back("platform", 2600 + x_offset, 340);
+      platforms.emplace_back("platform", 2800 + x_offset, 310);
+
+      platforms.emplace_back("platform", 3000 + x_offset, 330);
+      if (SDL_rand(2) == 1) cones.emplace_back(3085 + x_offset, 330 - 12);
+      platforms.emplace_back("platform", 3200 + x_offset, 350);
+
+      platforms.emplace_back("block", 3350 + x_offset, 340);
+      platforms.emplace_back("block", 3500 + x_offset, 320);
+      platforms.emplace_back("block", 3700 + x_offset, 340);
+      if (SDL_rand(2) == 1) cones.emplace_back(3750 + x_offset, 340 - 12);
+
+      platforms.emplace_back("platform", 3875 + x_offset, 360);
+      if (SDL_rand(2) == 1) cones.emplace_back(3945 + x_offset, 360 - 12);
+      platforms.emplace_back("platform", 4000 + x_offset, 340);
+
+      platforms.emplace_back("block", 4200 + x_offset, 320);
+      platforms.emplace_back("block", 4350 + x_offset, 290);
+      if (SDL_rand(2) == 1) cones.emplace_back(4400 + x_offset, 290 - 12);
+      platforms.emplace_back("block", 4500 + x_offset, 260);
+
+      platforms.emplace_back("platform", 4725 + x_offset, 375);
+      platforms.emplace_back("platform", 4950 + x_offset, 365);
+    }
   }
 
   void Events() {
@@ -862,6 +944,7 @@ struct Main{
         if (event.key.key == SDLK_LEFT) {port1.Left = true;}
         if (event.key.key == SDLK_W || event.key.key == SDLK_UP) {port1.Up = true;}
         if (event.key.key == SDLK_S || event.key.key == SDLK_DOWN) {port1.Down = true;}
+        if (event.key.key == SDLK_P) {kenny.spray_cans ++;}
         if (event.key.key == SDLK_ESCAPE) {port1.Back = true;}
       }
 
