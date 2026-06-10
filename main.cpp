@@ -536,11 +536,13 @@ struct Main{
   int gamestate = 0;
   int transition_timer = 0;
   int transition_release = 0;
-  int intro_slide = 0;
+  int slide = 0;
   int time_lapsed = 0;
   bool finish_reached = false;
-  int level = 2;
+  int level = 1;
   std::array<std::string, 10> intro_texts = {"It was a normal day in Kenny's city, Panpace.", "It's a city of skating and graffiti.", "And Kenny has always been the star of the city.", "One day, somebody took his place from the spotlight...", "It was a mouse, Keikei.", "And Kenny is an ave.", "Everybody turned their gazes away from Kenny!", "Keikei started leaving marks of grafitti all around the vicinity.", "It was time for Kenny to grab hold of his place again!", "- Push START button -"};
+  std::array<std::string, 6> stage_2_texts = {"Kenny's journey to the spotlight was going well.", "He had to endure the ridicule of the public...", "KeiKei was making a game of his efforts.", "So KeiKei challenged you to a rap battle!", "Kenny has no choice to accept it.", "- Push START button -"};
+  std::array<std::string, 10> stage_3_texts = {"Kenny's journey to the spotlight was going well.", "The public started to acknowledge him and his talents.", "He was determined to get back to the top!", "However, Keikei was not going to let that happen.", "Keikei started putting up billboards all around the city.", "KeiKei is a mouse.", "And Kenny is an ave.", "Kenny had no choice but to get rid of those billboards.", "Kenny's mission was clear: destroy all of Keikei's billboards!", "- Push START button -"};
   Player kenny;
   std::vector<Platform> platforms;
   std::vector<SprayCan> spraycans;
@@ -653,6 +655,7 @@ struct Main{
     if (gamestate == 0) Menu();
     if (gamestate == 1) Introduction();
     if (gamestate == 2) Gameplay();
+    if (gamestate == 3) StoryProgression1();
 
     SDL_RenderPresent(renderer);
 
@@ -684,21 +687,53 @@ struct Main{
   }
   
   void Introduction(){
-    if (intro_slide >= 4 && intro_slide <= 6) SDL_RenderTexture(renderer, keikei_art, nullptr, nullptr);
-    if (intro_slide >= 7 && intro_slide <= 9) SDL_RenderTexture(renderer, kenny_and_keikei_skyline, nullptr, nullptr);
+    if (slide >= 4 && slide <= 6) SDL_RenderTexture(renderer, keikei_art, nullptr, nullptr);
+    if (slide >= 7 && slide <= 9) SDL_RenderTexture(renderer, kenny_and_keikei_skyline, nullptr, nullptr);
 
     SDL_SetRenderScale(renderer, 1.0f, 1.5f);
-    if (intro_slide >= 9) {
+    if (slide >= 9) {
       SDL_SetRenderScale(renderer, 1.5f, 1.8f);
     }
-    SDL_RenderDebugText(renderer, 1.0f, 10.0f, intro_texts[intro_slide].c_str());
+    const std::string& text = intro_texts[slide];
+    float charWidth = 8.0f;
+    float textWidth = text.size() * charWidth;
+    float x = (width - textWidth) / 2.0f;
+    SDL_RenderDebugText(renderer, x, 10.0f, text.c_str());
     SDL_SetRenderScale(renderer, 1.0f, 1.0f);
     
     if (port1.Start) {
-      if (intro_slide >= 9) {
+      if (slide >= 9) {
         if (port1.Start) transition_release = true;
       }
-      else intro_slide ++;
+      else slide ++;
+    }
+
+    for (int i = 0; i < width; i += width / 10) {
+      SDL_SetRenderDrawColor(renderer, 0, 0, 10, 255);
+      SDL_FRect transition_rect {.x = (float)i, .y = 0.0f, .w = (float)(std::clamp(transition_timer - (i / 10), 0, 100)), .h = (float)height};
+      SDL_RenderFillRect(renderer, &transition_rect);
+    }
+    if (transition_release) transition_timer += 2;
+    if (transition_timer > 200) startGame(true);
+  }
+
+  void StoryProgression1(){
+    SDL_SetRenderScale(renderer, 1.0f, 1.5f);
+    if (slide >= 5) {
+      SDL_SetRenderScale(renderer, 1.5f, 1.8f);
+    }
+    const std::string& text = stage_2_texts[slide];
+    float charWidth = 8.0f; // approximate debug font width
+    float textWidth = text.size() * charWidth;
+    float x = (width - textWidth) / 2.0f;
+    SDL_RenderDebugText(renderer, x, 10.0f, text.c_str());
+    SDL_SetRenderScale(renderer, 1.0f, 1.0f);
+    
+    if (port1.Start) {
+      if (slide >= 5) {
+        if (port1.Start) transition_release = true;
+      }
+      else slide ++;
     }
 
     for (int i = 0; i < width; i += width / 10) {
@@ -747,9 +782,37 @@ struct Main{
         MIX_SetTrackAudio(track, audio);
         MIX_PlayTrack(track, false);
       }
+      if (kenny.frame >= 44) {
+        SDL_SetRenderDrawColor(renderer, 255, 255, 255, 255);
+        SDL_SetRenderScale(renderer, 2.5f, 2.5f);
+        SDL_RenderDebugText(renderer, 60.0f, 120.0f, "Push START");
+        SDL_SetRenderScale(renderer, 1.0f, 1.0f);
+        if (port1.Start) {
+          if (level == 1) {
+            level = 2;
+            gamestate = 3;
+            slide = 0;
+            transition_release = false;
+            transition_timer = 0;
+            slide = 0;
+            time_lapsed = 0;
+            finish_reached = false;
+            port1.Start = false;
+          }
+          else if (level == 2) {
+            level = 3;
+            startGame();
+          }
+          else if (level == 3) {
+            level = 1;
+            startGame();
+          }
+        }
+      }
     }
-    if (port1.Back || port1.Start) {
+    if (port1.Back) {
       gamestate = 0;
+      level = 1;
       kenny.rect.x = 32.0f;
       kenny.rect.y = 32.0f;
       kenny.y_vel = 0.0f;
@@ -765,7 +828,7 @@ struct Main{
     if (kenny.rect.y > height && kenny.rect.x < width) { //When player has lost
       SDL_SetRenderDrawColor(renderer, 255, 255, 255, 255);
       SDL_SetRenderScale(renderer, 2.5f, 2.5f);
-      SDL_RenderDebugText(renderer, 60.0f, 40.0f, "Game Over!");
+      SDL_RenderDebugText(renderer, 50.0f, 40.0f, "Game Over!");
       SDL_SetRenderScale(renderer, 2.0f, 2.0f);
       SDL_RenderDebugText(renderer, 60.0f, 100.0f, "Push A to restart");
       SDL_RenderDebugText(renderer, 50.0f, 140.0f, "Push START to return");
@@ -825,11 +888,11 @@ struct Main{
     platforms.clear();
     spraycans.clear();
     cones.clear();
-    if (gamestate == 1) gamestate = 2;
     if (gamestate == 0) gamestate = 1;
+    else gamestate = 2;
     transition_release = false;
     transition_timer = 0;
-    intro_slide = 0;
+    slide = 0;
     time_lapsed = 0;
     finish_reached = false;
     kenny.trick_timer = 0;
@@ -948,6 +1011,9 @@ struct Main{
 
       platforms.emplace_back("platform", 4725 + x_offset, 375);
       platforms.emplace_back("platform", 4950 + x_offset, 365);
+    }
+    else if (level == 3) {
+
     }
   }
 
