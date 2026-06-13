@@ -262,11 +262,14 @@ struct Player{
   int score = 0;
   int spray_cans = 0;
   int trick_timer = 0;
+  int spray_can_collect_timer = 0;
   float strangle_timer = 0;
+  float land_shake_timer = 0;
   int grind_timer = 0;
   std::string trick = "";
 
   void Update(SDL_Renderer *renderer, const std::vector<Platform>& platforms, std::vector<SprayCan> &spraycans, std::vector<Cone> &cones, bool finish_reached, MIX_Mixer* mixer, Controller port) {
+    bool was_on_ground = on_ground;
     if (((state == "popshoveit" || state == "ollie" || state == "kickflip" || state == "heelflip") && frame == 6) || ((state == "backflip" || state == "frontflip") && frame == 6) || ((state == "right_tailwhip" || state == "left_tailwhip") && frame == 7)) {
       if (state == "backflip" || state == "frontflip" || state == "right_tailwhip" || state == "left_tailwhip") score -= 1;
       score -= 2;
@@ -278,12 +281,13 @@ struct Player{
     if (texture) {
       SDL_RenderTexture(renderer, texture, nullptr, &rect);
     }
+    float fall_speed = y_vel;
     rect.y -= y_vel;
     if (finish_reached && state != "win") rect.x += 3;
     
     bool found_collision = false;
     for (auto &platform : platforms) {
-      if (rect.x + rect.w > platform.rect.x && rect.x < platform.rect.x + platform.rect.w && rect.y + rect.h > platform.rect.y && rect.y < platform.rect.y + platform.rect.h) {
+      if (rect.x + rect.w > platform.rect.x && rect.x < platform.rect.x + platform.rect.w && rect.y + rect.h > platform.rect.y && rect.y < platform.rect.y + (platform.rect.h / 2)) {
         if (platform.type != "building_top") {
           if (!on_ground) PlaySFX("./Sounds/sfx/land.wav", mixer);
           found_collision = true;
@@ -299,6 +303,10 @@ struct Player{
           break;
         }
       }
+    }
+    if (found_collision && !was_on_ground) {
+      float landing_height = std::abs(fall_speed);
+      if (landing_height >= 10.0f) land_shake_timer = 5.0f;
     }
     on_ground = found_collision;
 
@@ -337,10 +345,13 @@ struct Player{
       SDL_RenderDebugText(renderer, (float)(55 + trick_timer), 40.0f, trick.c_str());
       SDL_SetRenderScale(renderer, 1.0f, 1.0f);
     }
+    
+    if (spray_can_collect_timer > 0) {spray_can_collect_timer--;}
 
     for (auto &spraycan : spraycans) {
       if (rect.x + rect.w > spraycan.rect.x && rect.x < spraycan.rect.x + spraycan.rect.w && rect.y + rect.h > spraycan.rect.y && rect.y < spraycan.rect.y + spraycan.rect.h && !spraycan.collected) {
         spray_cans ++;
+        spray_can_collect_timer = 10;
         spraycan.collected = true;
         PlaySFX("./Sounds/sfx/spraycan.wav", mixer);
       }
@@ -381,7 +392,7 @@ struct Player{
         SDL_SetRenderDrawColor(renderer, 255, 255, 0, 255);
         if (frame >= 44) {
           SDL_SetRenderScale(renderer, 1.5f, 1.5f);
-          std::string scString = "Total Time: " + std::to_string(score);
+          std::string scString = "Your Score: " + std::to_string(score);
           SDL_RenderDebugText(renderer, 105.0f, 80.0f, scString.c_str());
           SDL_SetRenderScale(renderer, 1.0f, 1.0f);
         }
@@ -393,106 +404,109 @@ struct Player{
         if (port.A && on_ground) {
           on_ground = false;
           rect.y -= 2;
+          score++;
           y_vel = 5.0f;
           PlaySFX("./Sounds/sfx/jump.wav", mixer);
         }
       }
-      if (port.Right && (!on_ground) && (!trick_active) && state == "hop") {
-        trick_active = true;
-        state = "frontflip";
-        trick = "FRONT FLIP! -3";
-        PlaySFX("./Sounds/sfx/grandtrick.wav", mixer);
-        if (trick_timer >= 90) {
-          trick = trick + " COMBO!";
-          score--;
+      if (rect.y < 448) {
+        if (port.Right && (!on_ground) && (!trick_active) && state == "hop") {
+          trick_active = true;
+          state = "frontflip";
+          trick = "FRONT FLIP! -3";
+          PlaySFX("./Sounds/sfx/grandtrick.wav", mixer);
+          if (trick_timer >= 90) {
+            trick = trick + " COMBO!";
+            score--;
+          }
+          trick_timer = 0;
         }
-        trick_timer = 0;
-      }
-      if (port.Left && (!on_ground) && (!trick_active) && state == "hop") {
-        trick_active = true;
-        state = "backflip";
-        trick = "BACK FLIP! -3";
-        PlaySFX("./Sounds/sfx/grandtrick.wav", mixer);
-        if (trick_timer >= 90) {
-          trick = trick + " COMBO!";
-          score--;
+        if (port.Left && (!on_ground) && (!trick_active) && state == "hop") {
+          trick_active = true;
+          state = "backflip";
+          trick = "BACK FLIP! -3";
+          PlaySFX("./Sounds/sfx/grandtrick.wav", mixer);
+          if (trick_timer >= 90) {
+            trick = trick + " COMBO!";
+            score--;
+          }
+          trick_timer = 0;
         }
-        trick_timer = 0;
-      }
-      if (port.Up && (!on_ground) && (!trick_active) && state == "hop") {
-        trick_active = true;
-        state = "right_tailwhip";
-        trick = "RIGHT TAILWHIP! -3";
-        PlaySFX("./Sounds/sfx/grandtrick.wav", mixer);
-        if (trick_timer >= 90) {
-          trick = trick + " COMBO!";
-          score--;
+        if (port.Up && (!on_ground) && (!trick_active) && state == "hop") {
+          trick_active = true;
+          state = "right_tailwhip";
+          trick = "RIGHT TAILWHIP! -3";
+          PlaySFX("./Sounds/sfx/grandtrick.wav", mixer);
+          if (trick_timer >= 90) {
+            trick = trick + " COMBO!";
+            score--;
+          }
+          trick_timer = 0;
         }
-        trick_timer = 0;
-      }
-      if (port.Down && (!on_ground) && (!trick_active) && state == "hop") {
-        trick_active = true;
-        state = "left_tailwhip";
-        trick = "LEFT TAILWHIP! -3";
-        PlaySFX("./Sounds/sfx/grandtrick.wav", mixer);
-        if (trick_timer >= 90) {
-          trick = trick + " COMBO!";
-          score--;
+        if (port.Down && (!on_ground) && (!trick_active) && state == "hop") {
+          trick_active = true;
+          state = "left_tailwhip";
+          trick = "LEFT TAILWHIP! -3";
+          PlaySFX("./Sounds/sfx/grandtrick.wav", mixer);
+          if (trick_timer >= 90) {
+            trick = trick + " COMBO!";
+            score--;
+          }
+          trick_timer = 0;
         }
-        trick_timer = 0;
-      }
-      if (port.Right && on_ground && !trick_active) {
-        trick_active = true;
-        trick_timer = 0;
-        state = "popshoveit";
-        rect.y -= 2;
-        y_vel = 4.0f;
-        trick = "POP SHOVE-IT! -2";
-        PlaySFX("./Sounds/sfx/trick2.wav", mixer);
-        if (trick_timer >= 90) {
-          trick = trick + " COMBO!";
-          score--;
+        if (port.Right && on_ground && !trick_active) {
+          trick_active = true;
+          trick_timer = 0;
+          state = "popshoveit";
+          rect.y -= 2;
+          y_vel = 4.0f;
+          trick = "POP SHOVE-IT! -2";
+          PlaySFX("./Sounds/sfx/trick2.wav", mixer);
+          if (trick_timer >= 90) {
+            trick = trick + " COMBO!";
+            score--;
+          }
+          trick_timer = 0;
         }
-        trick_timer = 0;
-      }
-      if (port.Left && on_ground && !trick_active) {
-        trick_active = true;
-        state = "ollie";
-        rect.y -= 2;
-        y_vel = 4.0f;
-        trick = "OLLIE! -2";
-        PlaySFX("./Sounds/sfx/trick2.wav", mixer);
-        if (trick_timer >= 90) {
-          trick = trick + " COMBO!";
-          score--;
+        if (port.Left && on_ground && !trick_active) {
+          trick_active = true;
+          state = "ollie";
+          rect.y -= 2;
+          y_vel = 4.0f;
+          trick = "OLLIE! -2";
+          PlaySFX("./Sounds/sfx/trick2.wav", mixer);
+          if (trick_timer >= 90) {
+            trick = trick + " COMBO!";
+            score--;
+          }
+          trick_timer = 0;
         }
-        trick_timer = 0;
-      }
-      if (port.Up && on_ground && !trick_active) {
-        trick_active = true;
-        state = "kickflip";
-        rect.y -= 2;
-        y_vel = 4.0f;
-        trick = "KICKFLIP! -2";
-        PlaySFX("./Sounds/sfx/trick1.wav", mixer);
-        if (trick_timer >= 90) {
-          trick = trick + " COMBO!";
-          score--;
+        if (port.Up && on_ground && !trick_active) {
+          trick_active = true;
+          state = "kickflip";
+          rect.y -= 2;
+          y_vel = 4.0f;
+          trick = "KICKFLIP! -2";
+          PlaySFX("./Sounds/sfx/trick1.wav", mixer);
+          if (trick_timer >= 90) {
+            trick = trick + " COMBO!";
+            score--;
+          }
+          trick_timer = 0;
         }
-        trick_timer = 0;
-      }
-      if (port.Down && on_ground && !trick_active) {
-        trick_active = true;
-        state = "heelflip";
-        rect.y -= 2;
-        y_vel = 4.0f;
-        trick = "HEELFLIP! -2";
-        PlaySFX("./Sounds/sfx/trick1.wav", mixer);
-        if (trick_timer >= 90) {
-          trick = trick + " -1 COMBO!";
-          score--;
+        if (port.Down && on_ground && !trick_active) {
+          trick_active = true;
+          state = "heelflip";
+          rect.y -= 2;
+          y_vel = 4.0f;
+          trick = "HEELFLIP! -2";
+          PlaySFX("./Sounds/sfx/trick1.wav", mixer);
+          if (trick_timer >= 90) {
+            trick = trick + " -1 COMBO!";
+            score--;
+          }
+          trick_timer = 0;
         }
-        trick_timer = 0;
       }
     }
     if (score < 0) score = 0;
@@ -510,6 +524,7 @@ struct Main{
   MIX_Track *track;
   SDL_PropertiesID options;
   SDL_PropertiesID options2;
+  SDL_PropertiesID options3;
   SDL_Event event;
   Controller port1{};
   const short int width = 512;
@@ -524,6 +539,8 @@ struct Main{
   SDL_Texture *kenny_and_keikei_skyline;
   SDL_Surface *s_kenny_mark;
   SDL_Texture *kenny_mark;
+  SDL_Surface *s_fountain;
+  SDL_Texture *fountain;
   std::vector<SDL_FPoint> star_points;
   std::vector<Building> buildings;
   std::vector<Spotlight> spotlights;
@@ -570,16 +587,21 @@ struct Main{
     kenny_and_keikei_skyline = SDL_CreateTextureFromSurface(renderer, s_kenny_and_keikei_skyline);
     s_kenny_mark = SDL_LoadPNG("./Assets/mark.png");
     kenny_mark = SDL_CreateTextureFromSurface(renderer, s_kenny_mark);
+    s_fountain = SDL_LoadPNG("./Assets/fountain.png");
+    fountain = SDL_CreateTextureFromSurface(renderer, s_fountain);
     
     SDL_Log("Loading audio stream...");
     MIX_Init();
     mixer = MIX_CreateMixerDevice(SDL_AUDIO_DEVICE_DEFAULT_PLAYBACK, NULL);
     options = SDL_CreateProperties();
     options2 = SDL_CreateProperties();
+    options3 = SDL_CreateProperties();
     SDL_SetNumberProperty(options, MIX_PROP_PLAY_LOOPS_NUMBER, -1);
     SDL_SetNumberProperty(options, MIX_PROP_PLAY_LOOP_START_MILLISECOND_NUMBER, 10300);
     SDL_SetNumberProperty(options2, MIX_PROP_PLAY_LOOPS_NUMBER, -1);
     SDL_SetNumberProperty(options2, MIX_PROP_PLAY_LOOP_START_MILLISECOND_NUMBER, 6200);
+    SDL_SetNumberProperty(options3, MIX_PROP_PLAY_LOOPS_NUMBER, -1);
+    SDL_SetNumberProperty(options3, MIX_PROP_PLAY_LOOP_START_MILLISECOND_NUMBER, 9510);
 
     SDL_asprintf(&track_path, "./Sounds/tracks/You_Are_A_Hit.mp3");
     audio = MIX_LoadAudio(mixer, track_path, false);
@@ -609,17 +631,64 @@ struct Main{
     SDL_DestroyTexture(title);
     SDL_DestroyTexture(keikei_art);
     SDL_DestroyTexture(kenny_and_keikei_skyline);
+    SDL_DestroyTexture(fountain);
     SDL_DestroyRenderer(renderer);
     SDL_DestroyWindow(window);
     SDL_DestroySurface(s_title);
     SDL_DestroySurface(s_keikei_art);
     SDL_DestroySurface(s_kenny_and_keikei_skyline);
+    SDL_DestroySurface(s_fountain);
     SDL_Quit();
   }
 
+  int ComputeLandingShakeOffset(float timer) {
+    if (timer <= 0.0f) return 0;
+    switch ((int)std::ceil(timer)) {
+      case 5: return 2;
+      case 4: return -2;
+      case 3: return 1;
+      case 2: return -1;
+      default: return 0;
+    }
+  }
+
+  int ComputeConeShakeOffset(float timer) {
+    if (timer <= 0.0f) return 0;
+    switch ((int)std::ceil(timer)) {
+      case 10: return 3;
+      case 9: return -3;
+      case 8: return 2;
+      case 7: return -2;
+      case 6: return 0;
+      default: return 0;
+    }
+  }
+
+  void ApplyGameplayViewport() {
+    if (gamestate != 2) {
+      SDL_SetRenderViewport(renderer, nullptr);
+      return;
+    }
+
+    int shake_y = 0;
+    if (kenny.land_shake_timer > 0.0f) shake_y = ComputeLandingShakeOffset(kenny.land_shake_timer);
+    if (kenny.strangle_timer > 0.0f) {
+      int cone_offset = ComputeConeShakeOffset(kenny.strangle_timer);
+      if (cone_offset != 0) shake_y = cone_offset;
+    }
+
+    SDL_Rect viewport {.x = 0, .y = shake_y, .w = width, .h = height};
+    SDL_SetRenderViewport(renderer, &viewport);
+  }
+
   void Update() {
+    if (gamestate == 2 && kenny.land_shake_timer > 0.0f) {
+      kenny.land_shake_timer -= 1.0f;
+    }
+    ApplyGameplayViewport();
     SDL_SetRenderDrawColor(renderer, 0, 0, 75, 255);
     SDL_RenderClear(renderer);
+
     SDL_SetRenderDrawColor(renderer, 255, 255, 255, 255);
     SDL_RenderPoints(renderer, star_points.data(), star_points.size());
     for (auto& star : star_points) {
@@ -656,8 +725,10 @@ struct Main{
     if (gamestate == 1) Introduction();
     if (gamestate == 2) Gameplay();
     if (gamestate == 3) StoryProgression1();
+    if (gamestate == 4) RapBattle();
 
     SDL_RenderPresent(renderer);
+    SDL_SetRenderViewport(renderer, nullptr);
 
     Events();
   }
@@ -672,6 +743,11 @@ struct Main{
 
     SDL_SetRenderScale(renderer, 2.5f, 2.5f);
     SDL_RenderDebugText(renderer, 60.0f, 120.0f, "Push START");
+    SDL_SetRenderScale(renderer, 1.2f, 1.3f);
+    
+    SDL_RenderDebugText(renderer, 2.0f, 2.0f, "Keep your score low throughout the five stages!");
+    SDL_RenderDebugText(renderer, 2.0f, 320.0f, "Opdracht voor Skills! Door Kaan, Finn en Sebastian");
+    SDL_RenderDebugText(renderer, 2.0f, 332.0f, "Game by Tunari, no rights reserved");
     SDL_SetRenderScale(renderer, 1.0f, 1.0f);
 
     if (port1.Start) transition_release = true;
@@ -798,6 +874,13 @@ struct Main{
             time_lapsed = 0;
             finish_reached = false;
             port1.Start = false;
+            MIX_StopTrack(track, 1.0f);
+            SDL_asprintf(&track_path, "./Sounds/tracks/You_Are_A_Hit.mp3");
+            audio = MIX_LoadAudio(mixer, track_path, false);
+            SDL_free(track_path);
+            track = MIX_CreateTrack(mixer);
+            MIX_SetTrackAudio(track, audio);
+            MIX_PlayTrack(track, options);
           }
           else if (level == 2) {
             level = 3;
@@ -836,7 +919,7 @@ struct Main{
       if (port1.A) startGame();
     }
     else if (kenny.state != "win") { // When player is alive
-      std::string scoreString = "Time: " + std::to_string(kenny.score);
+      std::string scoreString = "Keep Your Score Low: " + std::to_string(kenny.score);
       SDL_SetRenderScale(renderer, 1.8f, 1.8f);
       SDL_SetRenderDrawColor(renderer, 255, 255, 255, 255);
       SDL_RenderDebugText(renderer, 1.0f, 1.0f, scoreString.c_str());
@@ -845,7 +928,18 @@ struct Main{
       SDL_SetRenderScale(renderer, 1.0f, 1.0f);
 
       SDL_Texture *sc_texture = LoadCachedTexture(renderer, "./Assets/spray_can.png");
-      SDL_FRect dst {.x = 11.0f, .y = 20.0f, .w = 10.0f, .h = 24.0f};
+      float sch = 24.0f;
+      if (kenny.spray_can_collect_timer == 10) {sch = 22.0f;}
+      if (kenny.spray_can_collect_timer == 9) {sch = 19.0f;}
+      if (kenny.spray_can_collect_timer == 8) {sch = 18.0f;}
+      if (kenny.spray_can_collect_timer == 7) {sch = 17.0f;}
+      if (kenny.spray_can_collect_timer == 6) {sch = 17.0f;}
+      if (kenny.spray_can_collect_timer == 5) {sch = 25.0f;}
+      if (kenny.spray_can_collect_timer == 4) {sch = 30.0f;}
+      if (kenny.spray_can_collect_timer == 3) {sch = 28.0f;}
+      if (kenny.spray_can_collect_timer == 2) {sch = 26.0f;}
+      if (kenny.spray_can_collect_timer == 1) {sch = 25.0f;}
+      SDL_FRect dst {.x = 11.0f, .y = sch - 4, .w = 10.0f, .h = sch};
       SDL_RenderTexture(renderer, sc_texture, nullptr, &dst);
       std::string scString = "x " + std::to_string(kenny.spray_cans) + " / 5";
       SDL_SetRenderDrawColor(renderer, 255, 255, 255, 255);
@@ -856,7 +950,7 @@ struct Main{
       score_obtain_timer -= 1;
       if (score_obtain_timer < 0) {
         kenny.score ++;
-        score_obtain_timer = 40;
+        score_obtain_timer = 55 - (level * 5);
       }
       spraycan_timer --;
       if (spraycan_timer < 0) {
@@ -879,16 +973,32 @@ struct Main{
     }
   }
 
+  void RapBattle(){
+    SDL_RenderTexture(renderer, fountain, nullptr, nullptr);
+
+    static Uint32 lastRapBattleLogTime = 0;
+    const int bpm = 85;
+    const int beat_ms = 60000 / bpm;
+    Uint32 now = SDL_GetTicks();
+    if (now - lastRapBattleLogTime >= static_cast<Uint32>(beat_ms)) {
+      //SDL_Log("Rap Battle Theme heartbeat at %d ms", beat_ms);
+      lastRapBattleLogTime = now;
+    }
+  }
+
   void startGame(bool playtheme = false) {
     kenny.rect.x = 32.0f;
     kenny.rect.y = 32.0f;
     kenny.y_vel = 0.0f;
     kenny.score = 0;
     kenny.spray_cans = 0;
+    kenny.land_shake_timer = 0.0f;
+    kenny.strangle_timer = 0.0f;
     platforms.clear();
     spraycans.clear();
     cones.clear();
     if (gamestate == 0) gamestate = 1;
+    else if (gamestate == 3) gamestate = 4;
     else gamestate = 2;
     transition_release = false;
     transition_timer = 0;
@@ -904,14 +1014,26 @@ struct Main{
     // }
     loadLevel();
     
-    if (playtheme) {
+    if (gamestate != 4)
+      {
+      if (playtheme) {
+        MIX_StopTrack(track, 1.0f);
+        SDL_asprintf(&track_path, "./Sounds/tracks/Today's_Your_Shot.mp3");
+        audio = MIX_LoadAudio(mixer, track_path, false);
+        SDL_free(track_path);
+        track = MIX_CreateTrack(mixer);
+        MIX_SetTrackAudio(track, audio);
+        MIX_PlayTrack(track, options2);
+      }
+    }
+    else {
       MIX_StopTrack(track, 1.0f);
-      SDL_asprintf(&track_path, "./Sounds/tracks/Today's_Your_Shot.mp3");
+      SDL_asprintf(&track_path, "./Sounds/tracks/Rap_Battle_Theme.mp3");
       audio = MIX_LoadAudio(mixer, track_path, false);
       SDL_free(track_path);
       track = MIX_CreateTrack(mixer);
       MIX_SetTrackAudio(track, audio);
-      MIX_PlayTrack(track, options2);
+      MIX_PlayTrack(track, options3);
     }
   }
 
@@ -1013,7 +1135,46 @@ struct Main{
       platforms.emplace_back("platform", 4950 + x_offset, 365);
     }
     else if (level == 3) {
+      for (int i = 0; i < 5; i++) {
+        platforms.emplace_back("platform", 150 + (i * 100) + x_offset, 360);
+      }
+      platforms.emplace_back("platform", 700 + x_offset, 340);
+      platforms.emplace_back("platform", 850 + x_offset, 320);
+      if (SDL_rand(2) == 1) cones.emplace_back(875 + x_offset, 320 - 12);
+      platforms.emplace_back("platform", 1000 + x_offset, 330);
 
+      platforms.emplace_back("block", 1150 + x_offset, 330);
+      platforms.emplace_back("block", 1275 + x_offset, 330, 50, 0);
+      platforms.emplace_back("block", 1450 + x_offset, 320);
+      if (SDL_rand(2) == 1) cones.emplace_back(1490 + x_offset, 320 - 12);
+      platforms.emplace_back("block", 1600 + x_offset, 310);
+      platforms.emplace_back("platform", 1800 + x_offset, 300, 0, 50);
+
+      for (int i = 0; i < 3; i++) {
+        platforms.emplace_back("platform", 2000 + (i * 120) + x_offset, 200, 0, 100);
+      }
+      for (int i = 0; i < 3; i++) {
+        platforms.emplace_back("platform", 2480 + (i * 120) + x_offset, 250, 0, 100);
+      }
+      platforms.emplace_back("platform", 2950 + x_offset, 280, 0, 50);
+      platforms.emplace_back("platform", 3185 + x_offset, 350, 60);
+
+      for (int i = 0; i < 4; i++) {
+        platforms.emplace_back("block", 3400 + (i * 125) + x_offset, 310 - (i * 50));
+      }
+      for (int i = 0; i < 9; i++) {
+        platforms.emplace_back("platform", 3850 + (i * 100) + x_offset, 130);
+        if (SDL_rand(4) == 1) cones.emplace_back(3870 + (i * 100) + x_offset, 130 - 12);
+        if (SDL_rand(4) == 1 && i < 8) cones.emplace_back(3950 + (i * 100) + x_offset, 130 - 12);
+      }
+      for (int i = 0; i < 10; i++) {
+        platforms.emplace_back("platform", 3750 + (i * 100) + x_offset, 350);
+        if (SDL_rand(5) == 1) cones.emplace_back(3770 + (i * 100) + x_offset, 350 - 12);
+        if (SDL_rand(5) == 1 && i < 9) cones.emplace_back(3850 + (i * 100) + x_offset, 350 - 12);
+      }
+      platforms.emplace_back("block", 4800 + x_offset, 160);
+      if (SDL_rand(2) == 1) cones.emplace_back(4810 + x_offset, 160 - 12);
+      platforms.emplace_back("block", 4800 + x_offset, 330);
     }
   }
 
