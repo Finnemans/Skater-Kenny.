@@ -29,6 +29,8 @@ static SDL_Texture* LoadCachedTexture(SDL_Renderer* renderer, const std::string&
   SDL_DestroySurface(surface);
   if (!texture) {
     SDL_Log("Failed to create texture '%s': %s", path.c_str(), SDL_GetError());
+  } else {
+    SDL_SetTextureScaleMode(texture, SDL_SCALEMODE_NEAREST);
   }
   gTextureCache[path] = texture;
   return texture;
@@ -40,6 +42,30 @@ static void FreeCachedTextures() {
   }
   gTextureCache.clear();
 }
+
+
+struct ManagedTexture {
+  SDL_Surface* surface = nullptr;
+  SDL_Texture* texture = nullptr;
+
+  void Load(SDL_Renderer* renderer, const char* path) {
+    surface = SDL_LoadPNG(path);
+    if (!surface) {
+      SDL_Log("Failed to load texture '%s': %s", path, SDL_GetError());
+      return;
+    }
+    texture = SDL_CreateTextureFromSurface(renderer, surface);
+    if (!texture) SDL_Log("Failed to create texture '%s': %s", path, SDL_GetError());
+    else SDL_SetTextureScaleMode(texture, SDL_SCALEMODE_NEAREST);
+  }
+
+  void Destroy() {
+    if (texture) SDL_DestroyTexture(texture);
+    if (surface) SDL_DestroySurface(surface);
+    texture = nullptr;
+    surface = nullptr;
+  }
+};
 
 
 // -2147483647 - 2147483647
@@ -118,6 +144,43 @@ struct Building{
   }
 };
 
+struct Building2{
+  std::vector<SDL_FRect> rooms;
+  SDL_FRect rect;
+  short int height;
+  short int length;
+
+  Building2(int screenWidth, int screenHeight, int x_position = 0) {
+    height = (SDL_rand(20) + 5) * 15;
+    length = 3 + (SDL_rand(10) + 5) * 7;
+    if (x_position == 0) rect = {.x = (float)screenWidth, .y = (float)screenHeight - height, .w = (float)length, .h = (float)height};
+    else rect = {.x = (float)x_position, .y = (float)screenHeight - height, .w = (float)length, .h = (float)height};
+
+    for (int x = 0; x < std::floor(length / 10); x++){
+      for (int y = 0; y < std::floor((rect.y + rect.h) / 10); y++) {
+        if (SDL_rand(2) == 1) {
+          SDL_FRect room{
+            .x = rect.x + 5 + (x * 10), .y = rect.y + 5 + (y * 10),
+            .w = 6, .h = 6
+          };
+          rooms.push_back(room);
+        }
+      }
+    }
+  }
+
+  void Update(SDL_Renderer *renderer, bool finish_reached = false) {
+    SDL_SetRenderDrawColor(renderer, 0, 0, 55, 255);
+    SDL_RenderFillRect(renderer, &rect);
+    if (!finish_reached) rect.x -= 0.8;
+    for (auto& room : rooms) {
+      if (!finish_reached) room.x -= 0.8;
+      SDL_SetRenderDrawColor(renderer, 125, 125, 20, 255);
+      SDL_RenderFillRect(renderer, &room);
+    }
+  }
+};
+
 
 struct Spotlight{
   SDL_FRect rect;
@@ -132,7 +195,7 @@ struct Spotlight{
   void Update(SDL_Renderer *renderer, bool finish_reached = false) {
     SDL_Texture *texture = LoadCachedTexture(renderer, path);
     SDL_RenderTexture(renderer, texture, nullptr, &rect);
-    if (!finish_reached) rect.x -= 1;
+    if (!finish_reached) rect.x -= 0.7;
   }
 };
 
@@ -374,7 +437,7 @@ struct Player{
       else frame = 2;
     }
     
-    if (rect.x >= 512 - 150) {
+    if (rect.x >= 512 - 150 && on_ground) {
       state = "win";
       frame_timer --;
       if (frame_timer < 0 and frame < 58){
@@ -531,20 +594,29 @@ struct Main{
   const short int height = 448;
   const short int fps = 60;
   bool active = true;
-  SDL_Surface *s_title;
-  SDL_Texture *title;
-  SDL_Surface *s_keikei_art;
-  SDL_Texture *keikei_art;
-  SDL_Surface *s_kenny_and_keikei_skyline;
-  SDL_Texture *kenny_and_keikei_skyline;
-  SDL_Surface *s_kenny_mark;
-  SDL_Texture *kenny_mark;
-  SDL_Surface *s_fountain;
-  SDL_Texture *fountain;
+  ManagedTexture title;
+  ManagedTexture keikei_art;
+  ManagedTexture kenny_and_keikei_skyline;
+  ManagedTexture kenny_mark;
+  ManagedTexture fountain;
+  ManagedTexture cd3;
+  ManagedTexture cd2;
+  ManagedTexture cd1;
+  ManagedTexture rap_bar;
+  ManagedTexture kakr1;
+  ManagedTexture kakr2;
+  ManagedTexture kakr_speak1;
+  ManagedTexture kakr_speak2;
+  ManagedTexture kakr_think;
+  ManagedTexture kakr_hit;
+  ManagedTexture kakr_fail;
   std::vector<SDL_FPoint> star_points;
   std::vector<Building> buildings;
+  std::vector<Building2> buildings2;
   std::vector<Spotlight> spotlights;
+  float menu_text_scroll = (float)width;
   float building_timer = 50.0;
+  float building2_timer = 100.0;
   int spotlight_timer = 1000;
   bool which_spotlight = true;
   int score_obtain_timer = 60;
@@ -557,9 +629,14 @@ struct Main{
   int time_lapsed = 0;
   bool finish_reached = false;
   int level = 1;
-  std::array<std::string, 10> intro_texts = {"It was a normal day in Kenny's city, Panpace.", "It's a city of skating and graffiti.", "And Kenny has always been the star of the city.", "One day, somebody took his place from the spotlight...", "It was a mouse, Keikei.", "And Kenny is an ave.", "Everybody turned their gazes away from Kenny!", "Keikei started leaving marks of grafitti all around the vicinity.", "It was time for Kenny to grab hold of his place again!", "- Push START button -"};
+  int r_beats = 0;
+  int r_lap_beats = 0;
+  int r_kenny_score = 0;
+  int r_keikei_score = 0;
+  int r_state = 0;
+  std::array<std::string, 10> intro_texts = {"It was a normal day in Kenny's city, Panpace.", "It's a city of skating and graffiti.", "And Kenny has always been the star of the city.", "One day, somebody soon took his place from the spotlight...", "It was a youngster by the name of KeiKei.", "And Kenny is an ave.", "Everybody turned their gazes away from Kenny!", "KeiKei started leaving grafitti marks all around the vicinity.", "It was time for Kenny to grab hold of his place again!", "- Push START button -"};
   std::array<std::string, 6> stage_2_texts = {"Kenny's journey to the spotlight was going well.", "He had to endure the ridicule of the public...", "KeiKei was making a game of his efforts.", "So KeiKei challenged you to a rap battle!", "Kenny has no choice to accept it.", "- Push START button -"};
-  std::array<std::string, 10> stage_3_texts = {"Kenny's journey to the spotlight was going well.", "The public started to acknowledge him and his talents.", "He was determined to get back to the top!", "However, Keikei was not going to let that happen.", "Keikei started putting up billboards all around the city.", "KeiKei is a mouse.", "And Kenny is an ave.", "Kenny had no choice but to get rid of those billboards.", "Kenny's mission was clear: destroy all of Keikei's billboards!", "- Push START button -"};
+  std::array<std::string, 10> stage_3_texts = {"Kenny's journey to the spotlight was going well.", "The public started to acknowledge him and his talents.", "He was determined to get back to the top!", "However, KeiKei was not going to let that happen.", "KeiKei started putting up billboards all around the city.", "KeiKei is a mouse.", "And Kenny is an ave.", "Kenny had no choice but to get rid of those billboards.", "Kenny's mission was clear: destroy all of KeiKei's billboards!", "- Push START button -"};
   Player kenny;
   std::vector<Platform> platforms;
   std::vector<SprayCan> spraycans;
@@ -579,16 +656,22 @@ struct Main{
     // for (int i = 0; i < SDL_GetNumRenderDrivers(); i++) {
     //   SDL_Log("%d. %s", i + 1, SDL_GetRenderDriver(i));
     // }
-    s_title = SDL_LoadPNG("./Assets/title.png");
-    title = SDL_CreateTextureFromSurface(renderer, s_title);
-    s_keikei_art = SDL_LoadPNG("./Assets/keikei_art.png");
-    keikei_art = SDL_CreateTextureFromSurface(renderer, s_keikei_art);
-    s_kenny_and_keikei_skyline = SDL_LoadPNG("./Assets/kenny_and_keikei_skyline.png");
-    kenny_and_keikei_skyline = SDL_CreateTextureFromSurface(renderer, s_kenny_and_keikei_skyline);
-    s_kenny_mark = SDL_LoadPNG("./Assets/mark.png");
-    kenny_mark = SDL_CreateTextureFromSurface(renderer, s_kenny_mark);
-    s_fountain = SDL_LoadPNG("./Assets/fountain.png");
-    fountain = SDL_CreateTextureFromSurface(renderer, s_fountain);
+    title.Load(renderer, "./Assets/title.png");
+    keikei_art.Load(renderer, "./Assets/keikei_art.png");
+    kenny_and_keikei_skyline.Load(renderer, "./Assets/kenny_and_keikei_skyline.png");
+    kenny_mark.Load(renderer, "./Assets/mark.png");
+    fountain.Load(renderer, "./Assets/fountain.png");
+    cd3.Load(renderer, "./Assets/3.png");
+    cd2.Load(renderer, "./Assets/2.png");
+    cd1.Load(renderer, "./Assets/1.png");
+    rap_bar.Load(renderer, "./Assets/rap_bar.png");
+    kakr1.Load(renderer, "./Assets/kenny_and_keikei1.png");
+    kakr2.Load(renderer, "./Assets/kenny_and_keikei2.png");
+    kakr_speak1.Load(renderer, "./Assets/keikei_speak1.png");
+    kakr_speak2.Load(renderer, "./Assets/keikei_speak2.png");
+    kakr_think.Load(renderer, "./Assets/kenny_think.png");
+    kakr_hit.Load(renderer, "./Assets/kenny_correct.png");
+    kakr_fail.Load(renderer, "./Assets/kenny_incorrect.png");
     
     SDL_Log("Loading audio stream...");
     MIX_Init();
@@ -623,21 +706,34 @@ struct Main{
     buildings.emplace_back(width, height, 200);
     buildings.emplace_back(width, height, 300);
     buildings.emplace_back(width, height, 400);
+    buildings2.emplace_back(width, height);
+    buildings2.emplace_back(width, height, 5);
+    buildings2.emplace_back(width, height, 100);
+    buildings2.emplace_back(width, height, 200);
+    buildings2.emplace_back(width, height, 300);
+    buildings2.emplace_back(width, height, 400);
   }
 
   ~Main() {
     FreeCachedTextures();
     MIX_Quit();
-    SDL_DestroyTexture(title);
-    SDL_DestroyTexture(keikei_art);
-    SDL_DestroyTexture(kenny_and_keikei_skyline);
-    SDL_DestroyTexture(fountain);
+    title.Destroy();
+    keikei_art.Destroy();
+    kenny_and_keikei_skyline.Destroy();
+    fountain.Destroy();
+    cd3.Destroy();
+    cd2.Destroy();
+    cd1.Destroy();
+    rap_bar.Destroy();
+    kakr1.Destroy();
+    kakr2.Destroy();
+    kakr_speak1.Destroy();
+    kakr_speak2.Destroy();
+    kakr_think.Destroy();
+    kakr_hit.Destroy();
+    kakr_fail.Destroy();
     SDL_DestroyRenderer(renderer);
     SDL_DestroyWindow(window);
-    SDL_DestroySurface(s_title);
-    SDL_DestroySurface(s_keikei_art);
-    SDL_DestroySurface(s_kenny_and_keikei_skyline);
-    SDL_DestroySurface(s_fountain);
     SDL_Quit();
   }
 
@@ -692,7 +788,7 @@ struct Main{
     SDL_SetRenderDrawColor(renderer, 255, 255, 255, 255);
     SDL_RenderPoints(renderer, star_points.data(), star_points.size());
     for (auto& star : star_points) {
-      if (!finish_reached) star.x -= 1;
+      if (!finish_reached) star.x -= 0.5;
       if (star.x < 0) {star.x = width; star.y = SDL_rand(height);}
     }
     for (auto& spotlight : spotlights) {
@@ -707,6 +803,20 @@ struct Main{
       spotlights.emplace_back(width, height, 0, which_spotlight);
       spotlight_timer = 1000;
       which_spotlight = !which_spotlight;
+    }
+    // background buildings
+    for (auto& building2 : buildings2) {
+      building2.Update(renderer, finish_reached);
+    }
+    buildings2.erase(std::remove_if(buildings2.begin(), buildings2.end(),[](const Building2& b) {
+      return b.rect.x + b.rect.w < 0;}),
+      buildings2.end()
+    );
+    building2_timer -= 0.5;
+    if (building2_timer < 0) {
+      buildings2.emplace_back(width, height);
+      building2_timer = 100.0;
+    // foreground buildings
     }
     for (auto& building : buildings) {
       building.Update(renderer, finish_reached);
@@ -734,10 +844,10 @@ struct Main{
   }
 
   void Menu(){
-    SDL_FRect dst {.x = ((float)width / 2.0f) - ((float)s_title->w / 2.0f), .y = 80.0f, .w = 240.0f, .h = 149.0f};
+    SDL_FRect dst {.x = ((float)width / 2.0f) - ((float)title.surface->w / 2.0f), .y = 80.0f, .w = 240.0f, .h = 149.0f};
     dst.x += (float)std::sin(building_timer / 2) * 2;
     //SDL_SetTextureScaleMode(title, SDL_SCALEMODE_NEAREST);
-    SDL_RenderTexture(renderer, title, nullptr, &dst);
+    SDL_RenderTexture(renderer, title.texture, nullptr, &dst);
 
     SDL_SetRenderDrawColor(renderer, 255, 255, 255, 255);
 
@@ -745,10 +855,13 @@ struct Main{
     SDL_RenderDebugText(renderer, 60.0f, 120.0f, "Push START");
     SDL_SetRenderScale(renderer, 1.2f, 1.3f);
     
-    SDL_RenderDebugText(renderer, 2.0f, 2.0f, "Keep your score low throughout the five stages!");
+    SDL_RenderDebugText(renderer, menu_text_scroll, 2.0f, "Set out on a new Kenny game featuring five stages in Panpace and meet your new contending rival, KeiKei!");
     SDL_RenderDebugText(renderer, 2.0f, 320.0f, "Opdracht voor Skills! Door Kaan, Finn en Sebastian");
     SDL_RenderDebugText(renderer, 2.0f, 332.0f, "Game by Tunari, no rights reserved");
     SDL_SetRenderScale(renderer, 1.0f, 1.0f);
+
+    menu_text_scroll--;
+    if (menu_text_scroll < -(width * 1.6)) menu_text_scroll = (float)width;
 
     if (port1.Start) transition_release = true;
     if (port1.Back) active = false;
@@ -759,12 +872,12 @@ struct Main{
       SDL_RenderFillRect(renderer, &transition_rect);
     }
     if (transition_release) transition_timer += 2;
-    if (transition_timer > 200) startGame();
+    if (transition_timer > 200) {startGame();}// gamestate = 3;
   }
   
   void Introduction(){
-    if (slide >= 4 && slide <= 6) SDL_RenderTexture(renderer, keikei_art, nullptr, nullptr);
-    if (slide >= 7 && slide <= 9) SDL_RenderTexture(renderer, kenny_and_keikei_skyline, nullptr, nullptr);
+    if (slide >= 4 && slide <= 6) SDL_RenderTexture(renderer, keikei_art.texture, nullptr, nullptr);
+    if (slide >= 7 && slide <= 9) SDL_RenderTexture(renderer, kenny_and_keikei_skyline.texture, nullptr, nullptr);
 
     SDL_SetRenderScale(renderer, 1.0f, 1.5f);
     if (slide >= 9) {
@@ -826,14 +939,14 @@ struct Main{
       if (platform.type == "building_top") {
         platform.Update(renderer, finish_reached);
         SDL_FRect dst {.x = platform.rect.x + 15.0f, .y = platform.rect.y + 30.0f, .w = 32.0f, .h = 32.0f};
-        if (kenny.frame >= 28) SDL_RenderTexture(renderer, kenny_mark, nullptr, &dst);
+        if (kenny.frame >= 28) SDL_RenderTexture(renderer, kenny_mark.texture, nullptr, &dst);
       }
     }
     kenny.Update(renderer, platforms, spraycans, cones, finish_reached, mixer, port1);
     int last_platform_x = 0;
     for (auto& platform : platforms) {
       if (platform.type != "building_top") platform.Update(renderer, finish_reached);
-      if (platform.rect.x > last_platform_x) last_platform_x = platform.rect.x;
+      if (platform.rect.x > last_platform_x) last_platform_x = platform.rect.x + 2;
     }
     platforms.erase(std::remove_if(platforms.begin(), platforms.end(),[](const Platform& p) {
       return p.rect.x + p.rect.w < 0;}), platforms.end());
@@ -908,7 +1021,7 @@ struct Main{
       MIX_SetTrackAudio(track, audio);
       MIX_PlayTrack(track, options);
     }
-    if (kenny.rect.y > height && kenny.rect.x < width) { //When player has lost
+    if (kenny.rect.y > height && kenny.state != "win") { //When player has lost
       SDL_SetRenderDrawColor(renderer, 255, 255, 255, 255);
       SDL_SetRenderScale(renderer, 2.5f, 2.5f);
       SDL_RenderDebugText(renderer, 50.0f, 40.0f, "Game Over!");
@@ -974,16 +1087,54 @@ struct Main{
   }
 
   void RapBattle(){
-    SDL_RenderTexture(renderer, fountain, nullptr, nullptr);
+    SDL_RenderTexture(renderer, fountain.texture, nullptr, nullptr);
 
+    //Elke zeven beats = 1 Tracker patroon
     static Uint32 lastRapBattleLogTime = 0;
-    const int bpm = 85;
-    const int beat_ms = 60000 / bpm;
     Uint32 now = SDL_GetTicks();
-    if (now - lastRapBattleLogTime >= static_cast<Uint32>(beat_ms)) {
-      //SDL_Log("Rap Battle Theme heartbeat at %d ms", beat_ms);
+    if (now - lastRapBattleLogTime >= static_cast<Uint32>(60000 / 85)) { //milliseconds (ms) / beats per minute (tempo/bpm)
       lastRapBattleLogTime = now;
+      r_beats++;
+      r_lap_beats++;
+
+      if (r_beats > 7) {
+        if (r_lap_beats == 5) PlaySFX("./Sounds/sfx/tickticktick.wav", mixer);
+      }
+      if (r_beats >= 20 && r_lap_beats == 1) {
+        if (r_state == 1) PlaySFX("./Sounds/sfx/rhymematch.wav", mixer);
+        else PlaySFX("./Sounds/sfx/rhymemismatch.wav", mixer);
+        r_state = 0;
+      }
     }
+    if (r_beats == 12) SDL_RenderTexture(renderer, cd3.texture, nullptr, nullptr); //show countdown 3
+    if (r_beats == 13) SDL_RenderTexture(renderer, cd2.texture, nullptr, nullptr); //show countdown 2
+    if (r_beats == 14) SDL_RenderTexture(renderer, cd1.texture, nullptr, nullptr); //show countdown 1
+    if (r_lap_beats > 6) {
+      r_lap_beats = 0;
+    }
+    //reset beats because we loop laps every 7 beats of the song
+    //(its pattern length in Furnace is 54 not 64)
+    
+    static Uint32 lastFrameLogTime = 0;
+    static bool first_frame = true;
+
+    if (now - lastFrameLogTime >= static_cast<Uint32>(60000 / 170)) { //to add animation
+      lastFrameLogTime = now;
+      first_frame = !first_frame;
+    }
+    if (first_frame) SDL_RenderTexture(renderer, kakr1.texture, nullptr, nullptr);
+    else SDL_RenderTexture(renderer, kakr2.texture, nullptr, nullptr);
+    if (r_beats > 15 && r_lap_beats >= 3 && r_lap_beats <= 4) {
+      if (first_frame) SDL_RenderTexture(renderer, kakr_speak1.texture, nullptr, nullptr);
+      else SDL_RenderTexture(renderer, kakr_speak2.texture, nullptr, nullptr);
+    }
+    if (r_beats > 15 && (r_lap_beats >= 5 || r_lap_beats == 0)) SDL_RenderTexture(renderer, kakr_think.texture, nullptr, nullptr);
+    if (r_beats > 17 && r_lap_beats >= 1 && r_lap_beats <= 2) {
+      if (r_state == 1) SDL_RenderTexture(renderer, kakr_hit.texture, nullptr, nullptr);
+      else SDL_RenderTexture(renderer, kakr_fail.texture, nullptr, nullptr);
+    }
+
+    SDL_RenderTexture(renderer, rap_bar.texture, nullptr, nullptr);
   }
 
   void startGame(bool playtheme = false) {
@@ -991,7 +1142,7 @@ struct Main{
     kenny.rect.y = 32.0f;
     kenny.y_vel = 0.0f;
     kenny.score = 0;
-    kenny.spray_cans = 0;
+    kenny.spray_cans = 5;
     kenny.land_shake_timer = 0.0f;
     kenny.strangle_timer = 0.0f;
     platforms.clear();
@@ -1006,6 +1157,10 @@ struct Main{
     time_lapsed = 0;
     finish_reached = false;
     kenny.trick_timer = 0;
+    r_beats = 0;
+    r_lap_beats = 0;
+    r_kenny_score = 0;
+    r_keikei_score = 0;
     // for (int i = 0; i < 10; i++) {
     //   platforms.emplace_back("block", 150 + (i * 200), 300);
     // }
@@ -1099,40 +1254,43 @@ struct Main{
       platforms.emplace_back("block", 1050 + x_offset, 350);
       if (SDL_rand(2) == 1) cones.emplace_back(1050 + x_offset, 350 - 12);
 
-      platforms.emplace_back("block", 1200 + x_offset, 330);
-      platforms.emplace_back("block", 1300 + x_offset, 300);
-      platforms.emplace_back("block", 1400 + x_offset, 270);
+      platforms.emplace_back("block", 1200 + x_offset, 330, 0, 20);
+      platforms.emplace_back("block", 1300 + x_offset, 300, 0, 20);
+      platforms.emplace_back("block", 1400 + x_offset, 270, 0, 20);
 
-      platforms.emplace_back("platform", 1550 + x_offset, 290);
+      platforms.emplace_back("platform", 1550 + x_offset, 290, 0, 30);
 
       platforms.emplace_back("rail", 1700 + x_offset, 260);
       platforms.emplace_back("rail", 1950 + x_offset, 300);
 
       platforms.emplace_back("platform", 2200 + x_offset, 340);
-      platforms.emplace_back("platform", 2400 + x_offset, 310);
+      platforms.emplace_back("platform", 2400 + x_offset, 310, 20);
       platforms.emplace_back("platform", 2600 + x_offset, 340);
-      platforms.emplace_back("platform", 2800 + x_offset, 310);
+      platforms.emplace_back("platform", 2800 + x_offset, 310, 20);
 
       platforms.emplace_back("platform", 3000 + x_offset, 330);
       if (SDL_rand(2) == 1) cones.emplace_back(3085 + x_offset, 330 - 12);
       platforms.emplace_back("platform", 3200 + x_offset, 350);
 
-      platforms.emplace_back("block", 3350 + x_offset, 340);
+      platforms.emplace_back("block", 3350 + x_offset, 330, 0, 30);
       platforms.emplace_back("block", 3500 + x_offset, 320);
       platforms.emplace_back("block", 3700 + x_offset, 340);
       if (SDL_rand(2) == 1) cones.emplace_back(3750 + x_offset, 340 - 12);
 
-      platforms.emplace_back("platform", 3875 + x_offset, 360);
+      platforms.emplace_back("platform", 3865 + x_offset, 360);
       if (SDL_rand(2) == 1) cones.emplace_back(3945 + x_offset, 360 - 12);
-      platforms.emplace_back("platform", 4000 + x_offset, 340);
+      platforms.emplace_back("platform", 3975 + x_offset, 340, 50);
 
       platforms.emplace_back("block", 4200 + x_offset, 320);
       platforms.emplace_back("block", 4350 + x_offset, 290);
       if (SDL_rand(2) == 1) cones.emplace_back(4400 + x_offset, 290 - 12);
-      platforms.emplace_back("block", 4500 + x_offset, 260);
+      platforms.emplace_back("block", 4500 + x_offset, 250, 0, 50);
 
       platforms.emplace_back("platform", 4725 + x_offset, 375);
-      platforms.emplace_back("platform", 4950 + x_offset, 365);
+      if (kenny.spray_cans >= 5) {
+        platforms.emplace_back("platform", 4975 + x_offset, 350, 75);
+        platforms.emplace_back("platform", 4875 + x_offset, 350, 75);
+      }
     }
     else if (level == 3) {
       for (int i = 0; i < 5; i++) {
