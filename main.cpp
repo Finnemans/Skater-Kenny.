@@ -9,9 +9,31 @@
 #include <algorithm>
 #include <array>
 #include <unordered_map>
-
+#ifdef _WIN32
+#include <intrin.h>
+#endif
 
 static std::unordered_map<std::string, SDL_Texture*> gTextureCache;
+
+static std::string GetCPUBrandString() {
+#ifdef _WIN32
+  unsigned int cpuInfo[4] = {0};
+  __cpuid(reinterpret_cast<int*>(cpuInfo), 0x80000000);
+  if (cpuInfo[0] >= 0x80000004u) {
+    char brand[0x40] = {};
+    int* brandInts = reinterpret_cast<int*>(brand);
+    __cpuid(brandInts, 0x80000002);
+    __cpuid(brandInts + 4, 0x80000003);
+    __cpuid(brandInts + 8, 0x80000004);
+    std::string cpuBrand = brand;
+    while (!cpuBrand.empty() && (cpuBrand.back() == ' ' || cpuBrand.back() == '\0')) {
+      cpuBrand.pop_back();
+    }
+    if (!cpuBrand.empty()) return cpuBrand;
+  }
+#endif
+  return "unknown";
+}
 
 static SDL_Texture* LoadCachedTexture(SDL_Renderer* renderer, const std::string& path) {
   auto cacheIt = gTextureCache.find(path);
@@ -642,7 +664,7 @@ struct Main{
   int flash_sequence[3] = {SDL_rand(23) + 1, SDL_rand(23) + 1, SDL_rand(23) + 1};
   float ending_frame = 0.0;
   float ending_frame_total = 0.0;
-  int grading = 50;
+  int grading = 40;
   std::string rank;
   std::array<std::string, 10> intro_texts = {"It was a normal day in Kenny's city, Panpace.", "It's a city of skating and graffiti.", "And Kenny has always been the star of the city.", "One day, somebody soon took his place from the spotlight...", "It was a youngster by the name of KeiKei.", "And Kenny is an ave.", "Everybody turned their gazes away from Kenny!", "KeiKei started leaving grafitti marks all around the vicinity.", "It was time for Kenny to grab hold of his place again!", "- Push START button -"};
   std::array<std::string, 6> stage_1_texts = {"Kenny's journey to the spotlight was going well.", "He had to endure the ridicule of the public...", "KeiKei was making a game of his efforts.", "So KeiKei challenged you to a rap battle!", "Kenny has no choice to accept it.", "- Push START button -"};
@@ -661,8 +683,14 @@ struct Main{
     SDL_Init(SDL_INIT_VIDEO || SDL_INIT_AUDIO);
     window = SDL_CreateWindow("Skater KENNY.", width, height, SDL_WINDOW_RESIZABLE);
     renderer = SDL_CreateRenderer(window, "opengl"); //nullptr
-    SDL_Log("Backend Hardware Accelerated Renderer: %s", SDL_GetRendererName(renderer));
-    SDL_Log("Logical CPU Cores: %d", SDL_GetNumLogicalCPUCores());
+    const char* video_driver = SDL_GetCurrentVideoDriver();
+    const char* renderer_name = renderer ? SDL_GetRendererName(renderer) : "unknown";
+    const std::string cpu_brand = GetCPUBrandString();
+    SDL_Log("Backend Hardware Accelerated Renderer: %s", renderer_name ? renderer_name : "unknown");
+    SDL_Log("Render Drivers Amount: %d", SDL_GetNumRenderDrivers());
+    SDL_Log("Render Driver: %s", SDL_GetRenderDriver(1));
+    SDL_Log("CPU: %s | %d logical cores | %d MB RAM | %d-byte cache line", cpu_brand.c_str(), SDL_GetNumLogicalCPUCores(), SDL_GetSystemRAM(), SDL_GetCPUCacheLineSize());
+    SDL_Log("GPU: video driver='%s', renderer backend='%s'", video_driver ? video_driver : "unknown", renderer_name ? renderer_name : "unknown");
     SDL_SetRenderLogicalPresentation(renderer, width, height, SDL_LOGICAL_PRESENTATION_LETTERBOX);
     // for (int i = 0; i < SDL_GetNumRenderDrivers(); i++) {
     //   SDL_Log("%d. %s", i + 1, SDL_GetRenderDriver(i));
@@ -931,7 +959,7 @@ struct Main{
     if (level == 2) text = stage_1_texts[slide];
     else if (level == 3) text = stage_2_texts[slide];
     else if (level == 4) text = stage_3_texts[slide];
-    if (level == 4 && slide >= 3) SDL_RenderTexture(renderer, fireworks.texture, nullptr, nullptr);
+    if (level == 4 && slide >= 2) SDL_RenderTexture(renderer, fireworks.texture, nullptr, nullptr);
     float charWidth = 8.0f; // approximate debug font width
     float textWidth = text.size() * charWidth;
     float x = (width - textWidth) / 2.0f;
@@ -1064,6 +1092,7 @@ struct Main{
       kenny.rect.y = 32.0f;
       kenny.y_vel = 0.0f;
       platforms.clear();
+      menu_text_scroll = (float)width;
       MIX_StopTrack(track, 1.0f);
       SDL_asprintf(&track_path, "./Sounds/tracks/You_Are_A_Hit.mp3");
       audio = MIX_LoadAudio(mixer, track_path, false);
@@ -1193,9 +1222,7 @@ struct Main{
     if (r_beats == 12) SDL_RenderTexture(renderer, cd3.texture, nullptr, nullptr); //show countdown 3
     if (r_beats == 13) SDL_RenderTexture(renderer, cd2.texture, nullptr, nullptr); //show countdown 2
     if (r_beats == 14) SDL_RenderTexture(renderer, cd1.texture, nullptr, nullptr); //show countdown 1
-    if (r_lap_beats > 6) {
-      r_lap_beats = 0;
-    }
+    if (r_lap_beats > 6) r_lap_beats = 0;
     //reset beats because we loop laps every 7 beats of the song
     //(its pattern length in Furnace is 54 not 64)
     
@@ -1262,18 +1289,12 @@ struct Main{
     float keikei_bar_width = (float)std::max(0, r_keikei_score * 20);
 
     SDL_SetRenderDrawColor(renderer, 255, 0, 0, 255);
-    SDL_SetRenderDrawColor(renderer, 255, 0, 0, 255);
-    SDL_SetRenderDrawColor(renderer, 255, 0, 0, 255);
     SDL_FRect kenny_bar {.x = center_x - kenny_bar_width, .y = 8.0f, .w = kenny_bar_width, .h = 32.0f};
     SDL_RenderFillRect(renderer, &kenny_bar);
 
     SDL_SetRenderDrawColor(renderer, 0, 0, 255, 255);
-    SDL_SetRenderDrawColor(renderer, 0, 0, 255, 255);
-    SDL_SetRenderDrawColor(renderer, 0, 0, 255, 255);
     SDL_FRect keikei_bar {.x = center_x, .y = 8.0f, .w = keikei_bar_width, .h = 32.0f};
     SDL_RenderFillRect(renderer, &keikei_bar);
-
-    SDL_RenderFillRect(renderer, &kenny_bar);
 
     //std::cout << r_kenny_score << " " << r_keikei_score << std::endl;
 
@@ -1336,6 +1357,7 @@ struct Main{
         kenny.rect.y = 32.0f;
         kenny.y_vel = 0.0f;
         platforms.clear();
+        menu_text_scroll = (float)width;
         MIX_StopTrack(track, 1.0f);
         SDL_asprintf(&track_path, "./Sounds/tracks/You_Are_A_Hit.mp3");
         audio = MIX_LoadAudio(mixer, track_path, false);
@@ -1426,7 +1448,7 @@ struct Main{
       kenny.rect.y = 32.0f;
       kenny.y_vel = 0.0f;
       kenny.score = 0;
-      kenny.spray_cans = 5;
+      kenny.spray_cans = 0;
       kenny.land_shake_timer = 0.0f;
       kenny.strangle_timer = 0.0f;
       platforms.clear();
