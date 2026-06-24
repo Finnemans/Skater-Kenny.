@@ -1,6 +1,7 @@
 #include <SDL3/SDL.h>
 #include <SDL3/SDL_main.h>
 #include <SDL3_mixer/SDL_mixer.h>
+#include <iostream>
 #include <format>
 #include <string>
 #include <cmath>
@@ -66,7 +67,6 @@ struct ManagedTexture {
     surface = nullptr;
   }
 };
-
 
 // -2147483647 - 2147483647
 // 0 - 2147483647 * 2
@@ -450,7 +450,7 @@ struct Player{
         if (frame == 36 || frame == 38 || frame == 40 || frame == 42) green = 0;
         SDL_SetRenderDrawColor(renderer, 255, green, 0, 255);
         SDL_SetRenderScale(renderer, 2.0f, 2.0f);
-        SDL_RenderDebugText(renderer, 60.0f, 40.0f, "Track Complete!");
+        SDL_RenderDebugText(renderer, 65.0f, 40.0f, "Track Complete!");
         SDL_SetRenderScale(renderer, 1.0f, 1.0f);
         SDL_SetRenderDrawColor(renderer, 255, 255, 0, 255);
         if (frame >= 44) {
@@ -588,6 +588,7 @@ struct Main{
   SDL_PropertiesID options;
   SDL_PropertiesID options2;
   SDL_PropertiesID options3;
+  SDL_PropertiesID options4;
   SDL_Event event;
   Controller port1{};
   const short int width = 512;
@@ -610,6 +611,7 @@ struct Main{
   ManagedTexture kakr_think;
   ManagedTexture kakr_hit;
   ManagedTexture kakr_fail;
+  ManagedTexture fireworks;
   std::vector<SDL_FPoint> star_points;
   std::vector<Building> buildings;
   std::vector<Building2> buildings2;
@@ -634,9 +636,18 @@ struct Main{
   int r_kenny_score = 0;
   int r_keikei_score = 0;
   int r_state = 0;
+  int sequence[3] = {SDL_rand(23) + 1, SDL_rand(23) + 1, SDL_rand(23) + 1};
+  int r_which_flash = SDL_rand(3) + 1;
+  bool r_pressed = false;
+  int flash_sequence[3] = {SDL_rand(23) + 1, SDL_rand(23) + 1, SDL_rand(23) + 1};
+  float ending_frame = 0.0;
+  float ending_frame_total = 0.0;
+  int grading = 50;
+  std::string rank;
   std::array<std::string, 10> intro_texts = {"It was a normal day in Kenny's city, Panpace.", "It's a city of skating and graffiti.", "And Kenny has always been the star of the city.", "One day, somebody soon took his place from the spotlight...", "It was a youngster by the name of KeiKei.", "And Kenny is an ave.", "Everybody turned their gazes away from Kenny!", "KeiKei started leaving grafitti marks all around the vicinity.", "It was time for Kenny to grab hold of his place again!", "- Push START button -"};
-  std::array<std::string, 6> stage_2_texts = {"Kenny's journey to the spotlight was going well.", "He had to endure the ridicule of the public...", "KeiKei was making a game of his efforts.", "So KeiKei challenged you to a rap battle!", "Kenny has no choice to accept it.", "- Push START button -"};
-  std::array<std::string, 10> stage_3_texts = {"Kenny's journey to the spotlight was going well.", "The public started to acknowledge him and his talents.", "He was determined to get back to the top!", "However, KeiKei was not going to let that happen.", "KeiKei started putting up billboards all around the city.", "KeiKei is a mouse.", "And Kenny is an ave.", "Kenny had no choice but to get rid of those billboards.", "Kenny's mission was clear: destroy all of KeiKei's billboards!", "- Push START button -"};
+  std::array<std::string, 6> stage_1_texts = {"Kenny's journey to the spotlight was going well.", "He had to endure the ridicule of the public...", "KeiKei was making a game of his efforts.", "So KeiKei challenged you to a rap battle!", "Kenny has no choice to accept it.", "- Push START button -"};
+  std::array<std::string, 6> stage_2_texts = {"Kenny's journey to the spotlight was going well.", "The public started to acknowledge him and his talents.", "He was determined to get back to the top!", "However, KeiKei was not going to let that happen.", "Keikei challenged you to another rap battle!", "- Push START button -"};
+  std::array<std::string, 6> stage_3_texts = {"Kenny has finally gained back the public's support!", "That wraps up KeiKei's reign.", "Everyone cheers for Kenny; Outside was scenery of fireworks!", "Kenny extended his hands out to KeiKei", "and gave KeiKei one more chance to cooperate from now on", "THE END!"};
   Player kenny;
   std::vector<Platform> platforms;
   std::vector<SprayCan> spraycans;
@@ -672,6 +683,7 @@ struct Main{
     kakr_think.Load(renderer, "./Assets/kenny_think.png");
     kakr_hit.Load(renderer, "./Assets/kenny_correct.png");
     kakr_fail.Load(renderer, "./Assets/kenny_incorrect.png");
+    fireworks.Load(renderer, "./Assets/fireworks.png");
     
     SDL_Log("Loading audio stream...");
     MIX_Init();
@@ -679,12 +691,15 @@ struct Main{
     options = SDL_CreateProperties();
     options2 = SDL_CreateProperties();
     options3 = SDL_CreateProperties();
+    options4 = SDL_CreateProperties();
     SDL_SetNumberProperty(options, MIX_PROP_PLAY_LOOPS_NUMBER, -1);
     SDL_SetNumberProperty(options, MIX_PROP_PLAY_LOOP_START_MILLISECOND_NUMBER, 10300);
     SDL_SetNumberProperty(options2, MIX_PROP_PLAY_LOOPS_NUMBER, -1);
     SDL_SetNumberProperty(options2, MIX_PROP_PLAY_LOOP_START_MILLISECOND_NUMBER, 6200);
     SDL_SetNumberProperty(options3, MIX_PROP_PLAY_LOOPS_NUMBER, -1);
     SDL_SetNumberProperty(options3, MIX_PROP_PLAY_LOOP_START_MILLISECOND_NUMBER, 9510);
+    SDL_SetNumberProperty(options4, MIX_PROP_PLAY_LOOPS_NUMBER, -1);
+    SDL_SetNumberProperty(options4, MIX_PROP_PLAY_LOOP_START_MILLISECOND_NUMBER, 8084);
 
     SDL_asprintf(&track_path, "./Sounds/tracks/You_Are_A_Hit.mp3");
     audio = MIX_LoadAudio(mixer, track_path, false);
@@ -732,6 +747,7 @@ struct Main{
     kakr_think.Destroy();
     kakr_hit.Destroy();
     kakr_fail.Destroy();
+    fireworks.Destroy();
     SDL_DestroyRenderer(renderer);
     SDL_DestroyWindow(window);
     SDL_Quit();
@@ -760,19 +776,17 @@ struct Main{
     }
   }
 
-  void ApplyGameplayViewport() {
+  void ApplyGameplayViewport() { // for screen shake
     if (gamestate != 2) {
       SDL_SetRenderViewport(renderer, nullptr);
       return;
     }
-
     int shake_y = 0;
     if (kenny.land_shake_timer > 0.0f) shake_y = ComputeLandingShakeOffset(kenny.land_shake_timer);
     if (kenny.strangle_timer > 0.0f) {
       int cone_offset = ComputeConeShakeOffset(kenny.strangle_timer);
       if (cone_offset != 0) shake_y = cone_offset;
     }
-
     SDL_Rect viewport {.x = 0, .y = shake_y, .w = width, .h = height};
     SDL_SetRenderViewport(renderer, &viewport);
   }
@@ -834,8 +848,10 @@ struct Main{
     if (gamestate == 0) Menu();
     if (gamestate == 1) Introduction();
     if (gamestate == 2) Gameplay();
-    if (gamestate == 3) StoryProgression1();
+    if (gamestate == 3) StoryProgression();
     if (gamestate == 4) RapBattle();
+    if (gamestate == 5) RapBattleResults();
+    if (gamestate == 6) Ending();
 
     SDL_RenderPresent(renderer);
     SDL_SetRenderViewport(renderer, nullptr);
@@ -872,7 +888,7 @@ struct Main{
       SDL_RenderFillRect(renderer, &transition_rect);
     }
     if (transition_release) transition_timer += 2;
-    if (transition_timer > 200) {startGame();}// gamestate = 3;
+    if (transition_timer > 200) {startGame();}// gamestate = 3; 
   }
   
   void Introduction(){
@@ -906,12 +922,16 @@ struct Main{
     if (transition_timer > 200) startGame(true);
   }
 
-  void StoryProgression1(){
+  void StoryProgression(){
     SDL_SetRenderScale(renderer, 1.0f, 1.5f);
     if (slide >= 5) {
       SDL_SetRenderScale(renderer, 1.5f, 1.8f);
     }
-    const std::string& text = stage_2_texts[slide];
+    std::string text = "";
+    if (level == 2) text = stage_1_texts[slide];
+    else if (level == 3) text = stage_2_texts[slide];
+    else if (level == 4) text = stage_3_texts[slide];
+    if (level == 4 && slide >= 3) SDL_RenderTexture(renderer, fireworks.texture, nullptr, nullptr);
     float charWidth = 8.0f; // approximate debug font width
     float textWidth = text.size() * charWidth;
     float x = (width - textWidth) / 2.0f;
@@ -994,14 +1014,45 @@ struct Main{
             track = MIX_CreateTrack(mixer);
             MIX_SetTrackAudio(track, audio);
             MIX_PlayTrack(track, options);
+            grading -= kenny.score;
           }
           else if (level == 2) {
             level = 3;
-            startGame();
+            gamestate = 3;
+            slide = 0;
+            transition_release = false;
+            transition_timer = 0;
+            slide = 0;
+            time_lapsed = 0;
+            finish_reached = false;
+            port1.Start = false;
+            MIX_StopTrack(track, 1.0f);
+            SDL_asprintf(&track_path, "./Sounds/tracks/You_Are_A_Hit.mp3");
+            audio = MIX_LoadAudio(mixer, track_path, false);
+            SDL_free(track_path);
+            track = MIX_CreateTrack(mixer);
+            MIX_SetTrackAudio(track, audio);
+            MIX_PlayTrack(track, options);
+            grading -= kenny.score;
           }
           else if (level == 3) {
-            level = 1;
-            startGame();
+            level = 4;
+            gamestate = 3;
+            slide = 0;
+            transition_release = false;
+            transition_timer = 0;
+            slide = 0;
+            time_lapsed = 0;
+            finish_reached = false;
+            port1.Start = false;
+            MIX_StopTrack(track, 1.0f);
+            SDL_asprintf(&track_path, "./Sounds/tracks/You_Are_A_Hit.mp3");
+            audio = MIX_LoadAudio(mixer, track_path, false);
+            SDL_free(track_path);
+            track = MIX_CreateTrack(mixer);
+            MIX_SetTrackAudio(track, audio);
+            MIX_PlayTrack(track, options);
+            grading -= kenny.score;
           }
         }
       }
@@ -1089,21 +1140,54 @@ struct Main{
   void RapBattle(){
     SDL_RenderTexture(renderer, fountain.texture, nullptr, nullptr);
 
-    //Elke zeven beats = 1 Tracker patroon
+    //Every seven beats = 1 Tracker pattern
     static Uint32 lastRapBattleLogTime = 0;
     Uint32 now = SDL_GetTicks();
-    if (now - lastRapBattleLogTime >= static_cast<Uint32>(60000 / 85)) { //milliseconds (ms) / beats per minute (tempo/bpm)
+    static int bpm;
+    if (level < 3) bpm = 170;
+    if (level >= 3) bpm = 200;
+
+    if (now - lastRapBattleLogTime >= static_cast<Uint32>(60000 / (bpm / 2))) { //milliseconds (ms) / beats per minute (tempo/bpm)
       lastRapBattleLogTime = now;
       r_beats++;
       r_lap_beats++;
+      
+      flash_sequence[0] = SDL_rand(23) + 1;
+      flash_sequence[1] = SDL_rand(23) + 1;
+      flash_sequence[2] = SDL_rand(23) + 1;
 
       if (r_beats > 7) {
-        if (r_lap_beats == 5) PlaySFX("./Sounds/sfx/tickticktick.wav", mixer);
+        if (r_lap_beats == 5) {
+          if (level < 3) PlaySFX("./Sounds/sfx/tickticktick.wav", mixer);
+          if (level >= 3) PlaySFX("./Sounds/sfx/tickticktickfast.wav", mixer);
+        }
       }
       if (r_beats >= 20 && r_lap_beats == 1) {
-        if (r_state == 1) PlaySFX("./Sounds/sfx/rhymematch.wav", mixer);
-        else PlaySFX("./Sounds/sfx/rhymemismatch.wav", mixer);
-        r_state = 0;
+        if (r_state == 1) {
+          if (level < 3) PlaySFX("./Sounds/sfx/rhymematch.wav", mixer);
+          if (level >= 3) PlaySFX("./Sounds/sfx/rhymematchfast.wav", mixer);
+          r_kenny_score++;
+        }
+        else {
+          if (level < 3) PlaySFX("./Sounds/sfx/rhymemismatch.wav", mixer);
+          if (level >= 3) PlaySFX("./Sounds/sfx/rhymemismatchfast.wav", mixer);
+          r_keikei_score++;
+        }
+        r_pressed = false;
+        r_which_flash = SDL_rand(3) + 1;
+        sequence[0] = SDL_rand(23) + 1;
+        sequence[1] = SDL_rand(23) + 1;
+        sequence[2] = SDL_rand(23) + 1;
+      }
+      if (r_beats > 15 && (r_lap_beats >= 5 || r_lap_beats == 0) && ((r_which_flash == 1 && r_lap_beats == 5) || (r_which_flash == 2 && r_lap_beats == 6) || (r_which_flash == 3 && r_lap_beats == 7))) {
+        flash_sequence[0] = sequence[0];
+        flash_sequence[1] = sequence[1];
+        flash_sequence[2] = sequence[2];
+      }
+      else {
+        if (SDL_rand(3) == 0) flash_sequence[0] = sequence[0];
+        if (SDL_rand(10) == 0) flash_sequence[1] = sequence[1];
+        if (SDL_rand(4) == 0) flash_sequence[2] = sequence[2];
       }
     }
     if (r_beats == 12) SDL_RenderTexture(renderer, cd3.texture, nullptr, nullptr); //show countdown 3
@@ -1118,7 +1202,7 @@ struct Main{
     static Uint32 lastFrameLogTime = 0;
     static bool first_frame = true;
 
-    if (now - lastFrameLogTime >= static_cast<Uint32>(60000 / 170)) { //to add animation
+    if (now - lastFrameLogTime >= static_cast<Uint32>(60000 / bpm)) { //to add animation
       lastFrameLogTime = now;
       first_frame = !first_frame;
     }
@@ -1127,68 +1211,247 @@ struct Main{
     if (r_beats > 15 && r_lap_beats >= 3 && r_lap_beats <= 4) {
       if (first_frame) SDL_RenderTexture(renderer, kakr_speak1.texture, nullptr, nullptr);
       else SDL_RenderTexture(renderer, kakr_speak2.texture, nullptr, nullptr);
+      r_state = 0;
+      float seq_y_pos;
+      if (first_frame) seq_y_pos = 71.0;
+      else seq_y_pos = 70.0;
+      for (int i = 0; i < 3; i++) {
+        std::string shape_path = "./Assets/shapes/" + std::to_string(sequence[i]) + ".png";
+        SDL_Texture *shape_texture = LoadCachedTexture(renderer, shape_path);
+        if (shape_texture) {
+          SDL_FRect shape_rect {
+            .x = 254.0f + (i * 36.0f),
+            .y = seq_y_pos,
+            .w = 32.0f,
+            .h = 32.0f
+          };
+          SDL_RenderTexture(renderer, shape_texture, nullptr, &shape_rect);
+        }
+      }
     }
-    if (r_beats > 15 && (r_lap_beats >= 5 || r_lap_beats == 0)) SDL_RenderTexture(renderer, kakr_think.texture, nullptr, nullptr);
+    if (r_beats > 15 && (r_lap_beats >= 5 || r_lap_beats == 0)) {
+      SDL_RenderTexture(renderer, kakr_think.texture, nullptr, nullptr);
+
+      if (port1.A && !r_pressed) {
+        r_pressed = true;
+        if (std::equal(std::begin(sequence), std::end(sequence), std::begin(flash_sequence))) r_state = 1;
+        else r_state = 2;
+      }
+      
+      for (int i = 0; i < 3; i++) {
+        std::string shape_path = "./Assets/shapes/" + std::to_string(flash_sequence[i]) + ".png";
+        SDL_Texture *shape_texture = LoadCachedTexture(renderer, shape_path);
+        if (shape_texture) {
+          SDL_FRect shape_rect {
+            .x = 198.0f + (i * 36.0f),
+            .y = 76.0f,
+            .w = 32.0f,
+            .h = 32.0f
+          };
+          SDL_RenderTexture(renderer, shape_texture, nullptr, &shape_rect);
+        }
+      }
+    }
     if (r_beats > 17 && r_lap_beats >= 1 && r_lap_beats <= 2) {
       if (r_state == 1) SDL_RenderTexture(renderer, kakr_hit.texture, nullptr, nullptr);
       else SDL_RenderTexture(renderer, kakr_fail.texture, nullptr, nullptr);
     }
 
-    SDL_RenderTexture(renderer, rap_bar.texture, nullptr, nullptr);
-  }
+    float center_x = (float)width / 2.0f;
+    float kenny_bar_width = (float)std::max(0, r_kenny_score * 8);
+    float keikei_bar_width = (float)std::max(0, r_keikei_score * 20);
 
-  void startGame(bool playtheme = false) {
-    kenny.rect.x = 32.0f;
-    kenny.rect.y = 32.0f;
-    kenny.y_vel = 0.0f;
-    kenny.score = 0;
-    kenny.spray_cans = 5;
-    kenny.land_shake_timer = 0.0f;
-    kenny.strangle_timer = 0.0f;
-    platforms.clear();
-    spraycans.clear();
-    cones.clear();
-    if (gamestate == 0) gamestate = 1;
-    else if (gamestate == 3) gamestate = 4;
-    else gamestate = 2;
-    transition_release = false;
-    transition_timer = 0;
-    slide = 0;
-    time_lapsed = 0;
-    finish_reached = false;
-    kenny.trick_timer = 0;
-    r_beats = 0;
-    r_lap_beats = 0;
-    r_kenny_score = 0;
-    r_keikei_score = 0;
-    // for (int i = 0; i < 10; i++) {
-    //   platforms.emplace_back("block", 150 + (i * 200), 300);
-    // }
-    // for (int i = 0; i < 5; i++) {
-    //   platforms.emplace_back("platform", 200 + (i * 400), 250);
-    // }
-    loadLevel();
-    
-    if (gamestate != 4)
-      {
-      if (playtheme) {
-        MIX_StopTrack(track, 1.0f);
-        SDL_asprintf(&track_path, "./Sounds/tracks/Today's_Your_Shot.mp3");
-        audio = MIX_LoadAudio(mixer, track_path, false);
-        SDL_free(track_path);
-        track = MIX_CreateTrack(mixer);
-        MIX_SetTrackAudio(track, audio);
-        MIX_PlayTrack(track, options2);
-      }
-    }
-    else {
+    SDL_SetRenderDrawColor(renderer, 255, 0, 0, 255);
+    SDL_SetRenderDrawColor(renderer, 255, 0, 0, 255);
+    SDL_SetRenderDrawColor(renderer, 255, 0, 0, 255);
+    SDL_FRect kenny_bar {.x = center_x - kenny_bar_width, .y = 8.0f, .w = kenny_bar_width, .h = 32.0f};
+    SDL_RenderFillRect(renderer, &kenny_bar);
+
+    SDL_SetRenderDrawColor(renderer, 0, 0, 255, 255);
+    SDL_SetRenderDrawColor(renderer, 0, 0, 255, 255);
+    SDL_SetRenderDrawColor(renderer, 0, 0, 255, 255);
+    SDL_FRect keikei_bar {.x = center_x, .y = 8.0f, .w = keikei_bar_width, .h = 32.0f};
+    SDL_RenderFillRect(renderer, &keikei_bar);
+
+    SDL_RenderFillRect(renderer, &kenny_bar);
+
+    //std::cout << r_kenny_score << " " << r_keikei_score << std::endl;
+
+    SDL_RenderTexture(renderer, rap_bar.texture, nullptr, nullptr);
+
+    if (r_kenny_score >= 14 || r_keikei_score >= 6) {
+      gamestate = 5;
       MIX_StopTrack(track, 1.0f);
-      SDL_asprintf(&track_path, "./Sounds/tracks/Rap_Battle_Theme.mp3");
+      SDL_asprintf(&track_path, "./Sounds/tracks/Track_Complete!_2.mp3");
       audio = MIX_LoadAudio(mixer, track_path, false);
       SDL_free(track_path);
       track = MIX_CreateTrack(mixer);
       MIX_SetTrackAudio(track, audio);
-      MIX_PlayTrack(track, options3);
+      MIX_PlayTrack(track, false);
+      grading -= r_keikei_score;
+      grading += r_kenny_score;
+    }
+  }
+  
+  void RapBattleResults(){
+    SDL_SetRenderDrawColor(renderer, 255, 255, 255, 255);
+    SDL_SetRenderScale(renderer, 2.5f, 2.5f);
+    if (r_kenny_score >= 14) SDL_RenderDebugText(renderer, 50.0f, 40.0f, "You won!");
+    if (r_keikei_score >= 6) SDL_RenderDebugText(renderer, 50.0f, 40.0f, "You lost!");
+    SDL_SetRenderScale(renderer, 2.0f, 2.0f);
+    SDL_RenderDebugText(renderer, 60.0f, 100.0f, "Push A to continue");
+    SDL_SetRenderScale(renderer, 1.0f, 1.0f);
+    if (port1.A) startGame(true);
+  }
+
+  void Ending(){
+    const int offset_delay = 35;
+    ending_frame += 0.15f;
+    ending_frame_total += 0.15f;
+    if (ending_frame > 117.0f + offset_delay) ending_frame = 113.0f + offset_delay;
+    SDL_SetRenderDrawColor(renderer, 252, 254, 253, 255);
+    SDL_SetRenderScale(renderer, 1.0f, 1.0f);
+    SDL_FRect display {.x = 0.0f, .y = 0.0f, .w = (float)width, .h = (float)height};
+    SDL_RenderFillRect(renderer, &display);
+    SDL_SetRenderDrawColor(renderer, 180, 182, 181, 255);
+    SDL_FRect ground {.x = 0.0f, .y = 235.0f, .w = (float)width, .h = (float)height};
+    SDL_RenderFillRect(renderer, &ground);
+    if (ending_frame > offset_delay) {
+      SDL_Texture *frame_image = LoadCachedTexture(renderer, "./Assets/outro/" + std::to_string((int)(ending_frame - offset_delay)) + ".png");
+      SDL_RenderTexture(renderer, frame_image, nullptr, nullptr);
+    }
+    if (ending_frame_total > 145) {
+      SDL_SetRenderDrawColor(renderer, 0, 0, 0, 255);
+      SDL_SetRenderScale(renderer, 2.0f, 2.0f);
+      SDL_RenderDebugText(renderer, 90.0f, 185.0f, "Push START");
+      std::string rank_text = "Your Rank: " + rank;
+      SDL_RenderDebugText(renderer, 85.0f, 200.0f, rank_text.c_str());
+      SDL_SetRenderScale(renderer, 1.0f, 1.0f);
+      if (port1.Start) {
+        gamestate = 0;
+        level = 1;
+        ending_frame = 0.0f;
+        ending_frame_total = 0.0f;
+        kenny.rect.x = 32.0f;
+        kenny.rect.y = 32.0f;
+        kenny.y_vel = 0.0f;
+        platforms.clear();
+        MIX_StopTrack(track, 1.0f);
+        SDL_asprintf(&track_path, "./Sounds/tracks/You_Are_A_Hit.mp3");
+        audio = MIX_LoadAudio(mixer, track_path, false);
+        SDL_free(track_path);
+        track = MIX_CreateTrack(mixer);
+        MIX_SetTrackAudio(track, audio);
+        MIX_PlayTrack(track, options);
+      }
+    }
+  }
+
+  void startGame(bool playtheme = false) {
+    if (level < 4) {
+      kenny.rect.x = 32.0f;
+      kenny.rect.y = 32.0f;
+      kenny.y_vel = 0.0f;
+      kenny.score = 0;
+      kenny.spray_cans = 5;
+      kenny.land_shake_timer = 0.0f;
+      kenny.strangle_timer = 0.0f;
+      platforms.clear();
+      spraycans.clear();
+      cones.clear();
+      if (gamestate == 0) gamestate = 1;
+      else if (gamestate == 3) gamestate = 4;
+      else gamestate = 2;
+      transition_release = false;
+      transition_timer = 0;
+      slide = 0;
+      time_lapsed = 0;
+      finish_reached = false;
+      kenny.trick_timer = 0;
+      r_beats = 0;
+      r_lap_beats = 0;
+      r_kenny_score = 0;
+      r_keikei_score = 0;
+      // for (int i = 0; i < 10; i++) {
+      //   platforms.emplace_back("block", 150 + (i * 200), 300);
+      // }
+      // for (int i = 0; i < 5; i++) {
+      //   platforms.emplace_back("platform", 200 + (i * 400), 250);
+      // }
+      loadLevel();
+      
+      if (gamestate != 4)
+        {
+        if (playtheme) {
+          MIX_StopTrack(track, 1.0f);
+          SDL_asprintf(&track_path, "./Sounds/tracks/Today's_Your_Shot.mp3");
+          audio = MIX_LoadAudio(mixer, track_path, false);
+          SDL_free(track_path);
+          track = MIX_CreateTrack(mixer);
+          MIX_SetTrackAudio(track, audio);
+          MIX_PlayTrack(track, options2);
+        }
+      }
+      else {
+        if (level < 3) {
+          MIX_StopTrack(track, 1.0f);
+          SDL_asprintf(&track_path, "./Sounds/tracks/Rap_Battle_Theme.mp3");
+          audio = MIX_LoadAudio(mixer, track_path, false);
+          SDL_free(track_path);
+          track = MIX_CreateTrack(mixer);
+          MIX_SetTrackAudio(track, audio);
+          MIX_PlayTrack(track, options3);
+        }
+        if (level >= 3) {
+          MIX_StopTrack(track, 1.0f);
+          SDL_asprintf(&track_path, "./Sounds/tracks/Rap_Battle_Theme_Fast.mp3");
+          audio = MIX_LoadAudio(mixer, track_path, false);
+          SDL_free(track_path);
+          track = MIX_CreateTrack(mixer);
+          MIX_SetTrackAudio(track, audio);
+          MIX_PlayTrack(track, options4);
+        }
+      }
+    }
+    else {
+      MIX_StopTrack(track, 1.0f);
+      SDL_asprintf(&track_path, "./Sounds/tracks/The_End_to_the_Ladder!.mp3");
+      audio = MIX_LoadAudio(mixer, track_path, false);
+      SDL_free(track_path);
+      track = MIX_CreateTrack(mixer);
+      MIX_SetTrackAudio(track, audio);
+      MIX_PlayTrack(track, false);
+      
+      kenny.rect.x = 32.0f;
+      kenny.rect.y = 32.0f;
+      kenny.y_vel = 0.0f;
+      kenny.score = 0;
+      kenny.spray_cans = 5;
+      kenny.land_shake_timer = 0.0f;
+      kenny.strangle_timer = 0.0f;
+      platforms.clear();
+      spraycans.clear();
+      cones.clear();
+      gamestate = 6;
+      transition_release = false;
+      transition_timer = 0;
+      slide = 0;
+      time_lapsed = 0;
+      finish_reached = false;
+      kenny.trick_timer = 0;
+      r_beats = 0;
+      r_lap_beats = 0;
+      r_kenny_score = 0;
+      r_keikei_score = 0;
+      ending_frame = 0.0f;
+      ending_frame_total = 0.0f;
+      
+      if (grading >= 55) rank = "S";
+      else if (grading >= 50) rank = "A";
+      else if (grading >= 45) rank = "B";
+      else if (grading >= 40) rank = "C";
+      else if (grading > 30) rank = "D";
+      else rank = "F";
     }
   }
 
