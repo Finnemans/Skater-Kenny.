@@ -644,7 +644,7 @@ struct Main{
   int spotlight_timer = 1000;
   bool which_spotlight = true;
   int score_obtain_timer = 60;
-  int spraycan_timer = 500;
+  int spraycan_timer = 400;
   int cone_timer = 200;
   int gamestate = 0;
   int transition_timer = 0;
@@ -652,24 +652,24 @@ struct Main{
   int slide = 0;
   int time_lapsed = 0;
   bool finish_reached = false;
-  int level = 1;
+  int level = 1; //1, 2, 3, 4 is completion
   int r_beats = 0;
   int r_lap_beats = 0;
   int r_kenny_score = 0;
   int r_keikei_score = 0;
-  int r_state = 0;
+  int r_state = 0; // 1 = hit points, 0 and 2 are fail points
   int sequence[3] = {SDL_rand(23) + 1, SDL_rand(23) + 1, SDL_rand(23) + 1};
   int r_which_flash = SDL_rand(3) + 1;
   bool r_pressed = false;
   int flash_sequence[3] = {SDL_rand(23) + 1, SDL_rand(23) + 1, SDL_rand(23) + 1};
   float ending_frame = 0.0;
   float ending_frame_total = 0.0;
-  int grading = 40;
+  int grading = 45;
   std::string rank;
-  std::array<std::string, 10> intro_texts = {"It was a normal day in Kenny's city, Panpace.", "It's a city of skating and graffiti.", "And Kenny has always been the star of the city.", "One day, somebody soon took his place from the spotlight...", "It was a youngster by the name of KeiKei.", "And Kenny is an ave.", "Everybody turned their gazes away from Kenny!", "KeiKei started leaving grafitti marks all around the vicinity.", "It was time for Kenny to grab hold of his place again!", "- Push START button -"};
+  std::array<std::string, 10> intro_texts = {"It was a normal day in Kenny's city, Panpace.", "It's a city of skating and graffiti.", "And Kenny has always been the star of the city.", "One day, somebody soon took his place from the spotlight...", "It was a youngster by the nickname of KeiKei.", "And Kenny is an ave.", "Everybody turned their gazes away from Kenny!", "KeiKei started leaving grafitti marks all around the vicinity.", "It was time for Kenny to grab hold of his place again!", "- Push START button -"};
   std::array<std::string, 6> stage_1_texts = {"Kenny's journey to the spotlight was going well.", "He had to endure the ridicule of the public...", "KeiKei was making a game of his efforts.", "So KeiKei challenged you to a rap battle!", "Kenny has no choice to accept it.", "- Push START button -"};
   std::array<std::string, 6> stage_2_texts = {"Kenny's journey to the spotlight was going well.", "The public started to acknowledge him and his talents.", "He was determined to get back to the top!", "However, KeiKei was not going to let that happen.", "Keikei challenged you to another rap battle!", "- Push START button -"};
-  std::array<std::string, 6> stage_3_texts = {"Kenny has finally gained back the public's support!", "That wraps up KeiKei's reign.", "Everyone cheers for Kenny; Outside was scenery of fireworks!", "Kenny extended his hands out to KeiKei", "and gave KeiKei one more chance to cooperate from now on", "THE END!"};
+  std::array<std::string, 6> stage_3_texts = {"Kenny has finally gained back the public's support!", "That wraps up KeiKei's reign.", "Everyone cheers for Kenny; Outside was scenery of fireworks!", "Kenny extended his hands out to KeiKei...", "...and gave KeiKei one more chance to cooperate from now on", "THE END!"};
   Player kenny;
   std::vector<Platform> platforms;
   std::vector<SprayCan> spraycans;
@@ -820,9 +820,7 @@ struct Main{
   }
 
   void Update() {
-    if (gamestate == 2 && kenny.land_shake_timer > 0.0f) {
-      kenny.land_shake_timer -= 1.0f;
-    }
+    if (gamestate == 2 && kenny.land_shake_timer > 0.0f) kenny.land_shake_timer -= 1.0f;
     ApplyGameplayViewport();
     SDL_SetRenderDrawColor(renderer, 0, 0, 75, 255);
     SDL_RenderClear(renderer);
@@ -897,6 +895,8 @@ struct Main{
 
     SDL_SetRenderScale(renderer, 2.5f, 2.5f);
     SDL_RenderDebugText(renderer, 60.0f, 120.0f, "Push START");
+    SDL_SetRenderScale(renderer, 1.7f, 1.7f);
+    SDL_RenderDebugText(renderer, 35.0f, 210.0f, "Push DOWN to play arcade mode");
     SDL_SetRenderScale(renderer, 1.2f, 1.3f);
     
     SDL_RenderDebugText(renderer, menu_text_scroll, 2.0f, "Set out on a new Kenny game featuring five stages in Panpace and meet your new contending rival, KeiKei!");
@@ -905,7 +905,7 @@ struct Main{
     SDL_SetRenderScale(renderer, 1.0f, 1.0f);
 
     menu_text_scroll--;
-    if (menu_text_scroll < -(width * 1.6)) menu_text_scroll = (float)width;
+    if (menu_text_scroll < -(width * 1.7)) menu_text_scroll = (float)width;
 
     if (port1.Start) transition_release = true;
     if (port1.Back) active = false;
@@ -1019,7 +1019,7 @@ struct Main{
         MIX_SetTrackAudio(track, audio);
         MIX_PlayTrack(track, false);
       }
-      if (kenny.frame >= 44) {
+      if (kenny.frame >= 44) { // here, you have reached the finish
         SDL_SetRenderDrawColor(renderer, 255, 255, 255, 255);
         SDL_SetRenderScale(renderer, 2.5f, 2.5f);
         SDL_RenderDebugText(renderer, 60.0f, 120.0f, "Push START");
@@ -1119,6 +1119,7 @@ struct Main{
       std::string tString = "Track " + std::to_string(level);
       SDL_RenderDebugText(renderer, 230.0f, 1.0f, tString.c_str());
       SDL_SetRenderScale(renderer, 1.0f, 1.0f);
+      if (level >= 3) SDL_RenderDebugText(renderer, 420.0f, 20.0f, "Final Track");
 
       SDL_Texture *sc_texture = LoadCachedTexture(renderer, "./Assets/spray_can.png");
       float sch = 24.0f;
@@ -1148,7 +1149,7 @@ struct Main{
       spraycan_timer --;
       if (spraycan_timer < 0) {
         if (kenny.spray_cans < 5) spraycans.emplace_back(width, std::clamp(SDL_rand(300), 175, (int)(kenny.rect.y) + 50));
-        spraycan_timer = 450;
+        spraycan_timer = 400;
       }
       // cone_timer --;
       // if (cone_timer < 0) {
@@ -1173,14 +1174,14 @@ struct Main{
     static Uint32 lastRapBattleLogTime = 0;
     Uint32 now = SDL_GetTicks();
     static int bpm;
-    if (level < 3) bpm = 170;
+    if (level < 3) bpm = 170; // tempo depends on which level it was
     if (level >= 3) bpm = 200;
 
-    if (now - lastRapBattleLogTime >= static_cast<Uint32>(60000 / (bpm / 2))) { //milliseconds (ms) / beats per minute (tempo/bpm)
+    if (now - lastRapBattleLogTime >= static_cast<Uint32>(60000 / (bpm / 2))) { //milliseconds (ms) / beats per minute (tempo/bpm), this run once every beat
       lastRapBattleLogTime = now;
       r_beats++;
       r_lap_beats++;
-      
+      //flash_sequence is the pattern that appears above Kenny's head. They flash with the countdown of a beat finalization
       flash_sequence[0] = SDL_rand(23) + 1;
       flash_sequence[1] = SDL_rand(23) + 1;
       flash_sequence[2] = SDL_rand(23) + 1;
@@ -1203,17 +1204,19 @@ struct Main{
           r_keikei_score++;
         }
         r_pressed = false;
-        r_which_flash = SDL_rand(3) + 1;
-        sequence[0] = SDL_rand(23) + 1;
-        sequence[1] = SDL_rand(23) + 1;
-        sequence[2] = SDL_rand(23) + 1;
+        r_which_flash = SDL_rand(3) + 1; // determines which rotation of the flash sequence is going to be the correct one
+        sequence[0] = SDL_rand(23) + 1; // first shape of KeiKei's sequence
+        sequence[1] = SDL_rand(23) + 1; // second shape " " " "
+        sequence[2] = SDL_rand(23) + 1; // third " " " "
       }
       if (r_beats > 15 && (r_lap_beats >= 5 || r_lap_beats == 0) && ((r_which_flash == 1 && r_lap_beats == 5) || (r_which_flash == 2 && r_lap_beats == 6) || (r_which_flash == 3 && r_lap_beats == 7))) {
+        //which flash determines which rotation of the three is the correct sequence that KeiKei first "spoke" of
         flash_sequence[0] = sequence[0];
         flash_sequence[1] = sequence[1];
         flash_sequence[2] = sequence[2];
       }
       else {
+        //in order to complicate things, the false sequences which flash above Kenny's head could take some matching shapes that KeiKei has "spoken" of
         if (SDL_rand(3) == 0) flash_sequence[0] = sequence[0];
         if (SDL_rand(10) == 0) flash_sequence[1] = sequence[1];
         if (SDL_rand(4) == 0) flash_sequence[2] = sequence[2];
@@ -1224,18 +1227,19 @@ struct Main{
     if (r_beats == 14) SDL_RenderTexture(renderer, cd1.texture, nullptr, nullptr); //show countdown 1
     if (r_lap_beats > 6) r_lap_beats = 0;
     //reset beats because we loop laps every 7 beats of the song
+    //7 automatically snaps back to 0
     //(its pattern length in Furnace is 54 not 64)
     
     static Uint32 lastFrameLogTime = 0;
     static bool first_frame = true;
 
-    if (now - lastFrameLogTime >= static_cast<Uint32>(60000 / bpm)) { //to add animation
+    if (now - lastFrameLogTime >= static_cast<Uint32>(60000 / bpm)) { //to add animation, this runs twice every beat
       lastFrameLogTime = now;
       first_frame = !first_frame;
     }
     if (first_frame) SDL_RenderTexture(renderer, kakr1.texture, nullptr, nullptr);
     else SDL_RenderTexture(renderer, kakr2.texture, nullptr, nullptr);
-    if (r_beats > 15 && r_lap_beats >= 3 && r_lap_beats <= 4) {
+    if (r_beats > 15 && r_lap_beats >= 3 && r_lap_beats <= 4) { // when KeiKei is "speaking"
       if (first_frame) SDL_RenderTexture(renderer, kakr_speak1.texture, nullptr, nullptr);
       else SDL_RenderTexture(renderer, kakr_speak2.texture, nullptr, nullptr);
       r_state = 0;
@@ -1256,7 +1260,7 @@ struct Main{
         }
       }
     }
-    if (r_beats > 15 && (r_lap_beats >= 5 || r_lap_beats == 0)) {
+    if (r_beats > 15 && (r_lap_beats >= 5 || r_lap_beats == 0)) { // when Kenny is "thinking" (flashing sequences appear, 5 6 7 / 0, 7 automatically snaps back to 0)
       SDL_RenderTexture(renderer, kakr_think.texture, nullptr, nullptr);
 
       if (port1.A && !r_pressed) {
@@ -1280,30 +1284,32 @@ struct Main{
       }
     }
     if (r_beats > 17 && r_lap_beats >= 1 && r_lap_beats <= 2) {
-      if (r_state == 1) SDL_RenderTexture(renderer, kakr_hit.texture, nullptr, nullptr);
-      else SDL_RenderTexture(renderer, kakr_fail.texture, nullptr, nullptr);
+      if (r_state == 1) SDL_RenderTexture(renderer, kakr_hit.texture, nullptr, nullptr); //hit, green checkmark
+      else SDL_RenderTexture(renderer, kakr_fail.texture, nullptr, nullptr); //fail, red cross
     }
 
+    // calculate the length of Kenny and KeiKei's bars respectively
     float center_x = (float)width / 2.0f;
     float kenny_bar_width = (float)std::max(0, r_kenny_score * 8);
     float keikei_bar_width = (float)std::max(0, r_keikei_score * 20);
 
-    SDL_SetRenderDrawColor(renderer, 255, 0, 0, 255);
+    SDL_SetRenderDrawColor(renderer, 255, 0, 0, 255); // draw Kenny's bar
     SDL_FRect kenny_bar {.x = center_x - kenny_bar_width, .y = 8.0f, .w = kenny_bar_width, .h = 32.0f};
     SDL_RenderFillRect(renderer, &kenny_bar);
 
-    SDL_SetRenderDrawColor(renderer, 0, 0, 255, 255);
+    SDL_SetRenderDrawColor(renderer, 0, 0, 255, 255); // draw KeiKei's bar
     SDL_FRect keikei_bar {.x = center_x, .y = 8.0f, .w = keikei_bar_width, .h = 32.0f};
     SDL_RenderFillRect(renderer, &keikei_bar);
 
     //std::cout << r_kenny_score << " " << r_keikei_score << std::endl;
 
-    SDL_RenderTexture(renderer, rap_bar.texture, nullptr, nullptr);
+    SDL_RenderTexture(renderer, rap_bar.texture, nullptr, nullptr); //the points bar of Kenny and KeiKei
 
-    if (r_kenny_score >= 14 || r_keikei_score >= 6) {
+    if (r_kenny_score >= 14 || r_keikei_score >= 6) { //after someone wins/loses, rap battle match over
       gamestate = 5;
       MIX_StopTrack(track, 1.0f);
-      SDL_asprintf(&track_path, "./Sounds/tracks/Track_Complete!_2.mp3");
+      if (level < 3) SDL_asprintf(&track_path, "./Sounds/tracks/Track_Complete!_2.mp3");
+      if (level >= 3) SDL_asprintf(&track_path, "./Sounds/tracks/Track_Complete!_2_Fast.mp3");
       audio = MIX_LoadAudio(mixer, track_path, false);
       SDL_free(track_path);
       track = MIX_CreateTrack(mixer);
@@ -1314,7 +1320,7 @@ struct Main{
     }
   }
   
-  void RapBattleResults(){
+  void RapBattleResults(){ //draw the results of the rap battle
     SDL_SetRenderDrawColor(renderer, 255, 255, 255, 255);
     SDL_SetRenderScale(renderer, 2.5f, 2.5f);
     if (r_kenny_score >= 14) SDL_RenderDebugText(renderer, 50.0f, 40.0f, "You won!");
@@ -1326,7 +1332,7 @@ struct Main{
   }
 
   void Ending(){
-    const int offset_delay = 35;
+    const int offset_delay = 33;
     ending_frame += 0.15f;
     ending_frame_total += 0.15f;
     if (ending_frame > 117.0f + offset_delay) ending_frame = 113.0f + offset_delay;
@@ -1375,7 +1381,7 @@ struct Main{
       kenny.rect.y = 32.0f;
       kenny.y_vel = 0.0f;
       kenny.score = 0;
-      kenny.spray_cans = 5;
+      kenny.spray_cans = 0;
       kenny.land_shake_timer = 0.0f;
       kenny.strangle_timer = 0.0f;
       platforms.clear();
