@@ -649,6 +649,7 @@ struct Main{
   int gamestate = 0;
   int transition_timer = 0;
   int transition_release = 0;
+  bool arcade_mode = false;
   int slide = 0;
   int time_lapsed = 0;
   bool finish_reached = false;
@@ -907,7 +908,10 @@ struct Main{
     menu_text_scroll--;
     if (menu_text_scroll < -(width * 1.7)) menu_text_scroll = (float)width;
 
-    if (port1.Start) transition_release = true;
+    if (port1.Start || port1.Down) {
+      arcade_mode = port1.Down;
+      transition_release = true;
+    }
     if (port1.Back) active = false;
 
     for (int i = 0; i < width; i += width / 10) {
@@ -916,7 +920,7 @@ struct Main{
       SDL_RenderFillRect(renderer, &transition_rect);
     }
     if (transition_release) transition_timer += 2;
-    if (transition_timer > 200) {startGame();}// gamestate = 3; 
+    if (transition_timer > 200) startGame(arcade_mode, arcade_mode);
   }
   
   void Introduction(){
@@ -1085,7 +1089,7 @@ struct Main{
         }
       }
     }
-    if (port1.Back) {
+    if (port1.Back || port1.Start) {
       gamestate = 0;
       level = 1;
       kenny.rect.x = 32.0f;
@@ -1104,22 +1108,42 @@ struct Main{
     if (kenny.rect.y > height && kenny.state != "win") { //When player has lost
       SDL_SetRenderDrawColor(renderer, 255, 255, 255, 255);
       SDL_SetRenderScale(renderer, 2.5f, 2.5f);
-      SDL_RenderDebugText(renderer, 50.0f, 40.0f, "Game Over!");
+      SDL_RenderDebugText(renderer, 61.0f, 40.0f, "Game Over!");
       SDL_SetRenderScale(renderer, 2.0f, 2.0f);
-      SDL_RenderDebugText(renderer, 60.0f, 100.0f, "Push A to restart");
-      SDL_RenderDebugText(renderer, 50.0f, 140.0f, "Push START to return");
+      SDL_RenderDebugText(renderer, 58.0f, 100.0f, "Push A to restart");
+      SDL_RenderDebugText(renderer, 45.0f, 130.0f, "Push START to return");
       SDL_SetRenderScale(renderer, 1.0f, 1.0f);
-      if (port1.A) startGame();
+      if (arcade_mode) {
+        std::string scoreString = "Score: " + std::to_string(kenny.score);
+        std::string sprayString = "Spray Cans: " + std::to_string(kenny.spray_cans);
+        std::string meterString = "Meters: " + std::to_string((int)(kenny.rect.x / 100.0f));
+        SDL_SetRenderScale(renderer, 1.4f, 1.4f);
+        SDL_RenderDebugText(renderer, 60.0f, 225.0f, scoreString.c_str());
+        SDL_RenderDebugText(renderer, 60.0f, 250.0f, sprayString.c_str());
+        SDL_RenderDebugText(renderer, 60.0f, 275.0f, meterString.c_str());
+        SDL_SetRenderScale(renderer, 1.0f, 1.0f);
+      }
+      if (port1.A) startGame(0, arcade_mode);
     }
     else if (kenny.state != "win") { // When player is alive
+      time_lapsed += 3;
       std::string scoreString = "Keep Your Score Low: " + std::to_string(kenny.score);
       SDL_SetRenderScale(renderer, 1.8f, 1.8f);
       SDL_SetRenderDrawColor(renderer, 255, 255, 255, 255);
       SDL_RenderDebugText(renderer, 1.0f, 1.0f, scoreString.c_str());
-      std::string tString = "Track " + std::to_string(level);
-      SDL_RenderDebugText(renderer, 230.0f, 1.0f, tString.c_str());
-      SDL_SetRenderScale(renderer, 1.0f, 1.0f);
-      if (level >= 3) SDL_RenderDebugText(renderer, 420.0f, 20.0f, "Final Track");
+      if (!arcade_mode) {
+        std::string tString = "Track " + std::to_string(level);
+        SDL_RenderDebugText(renderer, 230.0f, 1.0f, tString.c_str());
+        SDL_SetRenderScale(renderer, 1.0f, 1.0f);
+        if (level >= 3) SDL_RenderDebugText(renderer, 420.0f, 20.0f, "Final Track");
+      }
+      else {
+        SDL_SetRenderScale(renderer, 1.6f, 1.6f);
+        std::string meterString = "Meters: " + std::to_string((int)(time_lapsed / 20));
+        float text_width = (float)meterString.size() * 8.0f;
+        float x_position = (float)width - text_width - 195.0f;
+        SDL_RenderDebugText(renderer, x_position, 1.0f, meterString.c_str());
+      }
 
       SDL_Texture *sc_texture = LoadCachedTexture(renderer, "./Assets/spray_can.png");
       float sch = 24.0f;
@@ -1134,8 +1158,11 @@ struct Main{
       if (kenny.spray_can_collect_timer == 2) {sch = 26.0f;}
       if (kenny.spray_can_collect_timer == 1) {sch = 25.0f;}
       SDL_FRect dst {.x = 11.0f, .y = sch - 4, .w = 10.0f, .h = sch};
+      SDL_SetRenderScale(renderer, 1.0f, 1.0f);
       SDL_RenderTexture(renderer, sc_texture, nullptr, &dst);
-      std::string scString = "x " + std::to_string(kenny.spray_cans) + " / 5";
+      std::string scString;
+      if (!arcade_mode) scString = "x " + std::to_string(kenny.spray_cans) + " / 5";
+      else scString = "x " + std::to_string(kenny.spray_cans);
       SDL_SetRenderDrawColor(renderer, 255, 255, 255, 255);
       SDL_SetRenderScale(renderer, 1.8f, 1.8f);
       SDL_RenderDebugText(renderer, 20.0f, 16.0f, scString.c_str());
@@ -1144,11 +1171,11 @@ struct Main{
       score_obtain_timer -= 1;
       if (score_obtain_timer < 0) {
         kenny.score ++;
-        score_obtain_timer = 55 - (level * 5);
+        score_obtain_timer = 60 - (level * 5);
       }
       spraycan_timer --;
       if (spraycan_timer < 0) {
-        if (kenny.spray_cans < 5) spraycans.emplace_back(width, std::clamp(SDL_rand(300), 175, (int)(kenny.rect.y) + 50));
+        if (kenny.spray_cans < 5 || arcade_mode) spraycans.emplace_back(width, std::clamp(SDL_rand(300), 175, (int)(kenny.rect.y) + 50));
         spraycan_timer = 400;
       }
       // cone_timer --;
@@ -1156,13 +1183,17 @@ struct Main{
       //   cones.emplace_back(width * 2, 0);
       //   cone_timer = 400;
       // }
-      time_lapsed += 3;
-      if (time_lapsed >= 4000 && time_lapsed <= 4004 and kenny.spray_cans < 5) loadLevel(750);
-      if (last_platform_x <= width + 3 && kenny.spray_cans >= 5) {
-        platforms.emplace_back("building", width + 250, height - 100);
-        platforms.emplace_back("building_top", width + 250 + 63, height - 165);
-        for (int i = 0; i < 5; i++)
-          platforms.emplace_back("platform", width + 478 + (i * 100), height - 100);
+      if (!arcade_mode) {
+        if (time_lapsed >= 4000 && time_lapsed <= 4004 and kenny.spray_cans < 5) loadLevel(750);
+        if (last_platform_x <= width + 3 && kenny.spray_cans >= 5) {
+          platforms.emplace_back("building", width + 250, height - 100);
+          platforms.emplace_back("building_top", width + 250 + 63, height - 165);
+          for (int i = 0; i < 5; i++)
+            platforms.emplace_back("platform", width + 478 + (i * 100), height - 100);
+        }
+      }
+      else {
+        if (time_lapsed >= 4000 && time_lapsed <= 4004) loadLevel(750, true);
       }
     }
   }
@@ -1375,7 +1406,7 @@ struct Main{
     }
   }
 
-  void startGame(bool playtheme = false) {
+  void startGame(bool playtheme = false, bool play_arcade_mode = false) {
     if (level < 4) {
       kenny.rect.x = 32.0f;
       kenny.rect.y = 32.0f;
@@ -1387,7 +1418,8 @@ struct Main{
       platforms.clear();
       spraycans.clear();
       cones.clear();
-      if (gamestate == 0) gamestate = 1;
+      if (play_arcade_mode) gamestate = 2;
+      else if (gamestate == 0) gamestate = 1;
       else if (gamestate == 3) gamestate = 4;
       else gamestate = 2;
       transition_release = false;
@@ -1406,7 +1438,7 @@ struct Main{
       // for (int i = 0; i < 5; i++) {
       //   platforms.emplace_back("platform", 200 + (i * 400), 250);
       // }
-      loadLevel();
+      loadLevel(0, play_arcade_mode);
       
       if (gamestate != 4)
         {
@@ -1483,9 +1515,12 @@ struct Main{
     }
   }
 
-  void loadLevel(int x_offset = 0) {
+  void loadLevel(int x_offset = 0, bool play_arcade_mode = false) {
     time_lapsed = 0;
-    if (level == 1) {
+    int current_level;
+    if (!play_arcade_mode) current_level = level;
+    else current_level = SDL_rand(6) + 1;
+    if (current_level == 1) {
       for (int i = 0; i < 5; i++) {
         platforms.emplace_back("platform", 150 + (i * 100) + x_offset, 350);
       }
@@ -1534,7 +1569,7 @@ struct Main{
       if (SDL_rand(2) == 1) cones.emplace_back(4750 + 85 + x_offset, 225 - 12);
       platforms.emplace_back("platform", 4950 + x_offset, 200);
     }
-    else if (level == 2) {
+    else if (current_level == 2) {
       for (int i = 0; i < 5; i++) {
         platforms.emplace_back("platform", 150 + (i * 100) + x_offset, 360);
       }
@@ -1583,7 +1618,7 @@ struct Main{
         platforms.emplace_back("platform", 4875 + x_offset, 350, 75);
       }
     }
-    else if (level == 3) {
+    else if (current_level == 3) {
       for (int i = 0; i < 5; i++) {
         platforms.emplace_back("platform", 150 + (i * 100) + x_offset, 360);
       }
@@ -1624,6 +1659,124 @@ struct Main{
       platforms.emplace_back("block", 4800 + x_offset, 160);
       if (SDL_rand(2) == 1) cones.emplace_back(4810 + x_offset, 160 - 12);
       platforms.emplace_back("block", 4800 + x_offset, 330);
+    }
+    else if (current_level == 4) {
+      for (int i = 0; i < 5; i++) {
+        platforms.emplace_back("platform", 150 + (i * 100) + x_offset, 360);
+      }
+      platforms.emplace_back("platform", 700 + x_offset, 330);
+      platforms.emplace_back("platform", 900 + x_offset, 310);
+      platforms.emplace_back("block", 1050 + x_offset, 340);
+      if (SDL_rand(2) == 1) cones.emplace_back(1060 + x_offset, 340 - 12);
+
+      platforms.emplace_back("block", 1225 + x_offset, 315, 0, 20);
+      platforms.emplace_back("block", 1380 + x_offset, 285, 0, 25);
+      platforms.emplace_back("platform", 1550 + x_offset, 260, 0, 35);
+
+      platforms.emplace_back("rail", 1730 + x_offset, 230);
+      platforms.emplace_back("platform", 1980 + x_offset, 295);
+      platforms.emplace_back("platform", 2200 + x_offset, 270, 0, 30);
+      platforms.emplace_back("rail", 2400 + x_offset, 250);
+
+      platforms.emplace_back("block", 2660 + x_offset, 300);
+      if (SDL_rand(2) == 1) cones.emplace_back(2700 + x_offset, 300 - 12);
+      platforms.emplace_back("block", 2775 + x_offset, 265);
+      platforms.emplace_back("block", 2950 + x_offset, 225);
+      platforms.emplace_back("block", 3120 + x_offset, 225);
+      platforms.emplace_back("platform", 3300 + x_offset, 220);
+
+      platforms.emplace_back("platform", 3500 + x_offset, 240);
+      platforms.emplace_back("platform", 3700 + x_offset, 280);
+      platforms.emplace_back("platform", 3950 + x_offset, 320);
+      platforms.emplace_back("block", 4100 + x_offset, 300);
+      platforms.emplace_back("block", 4200 + x_offset, 270);
+      if (SDL_rand(2) == 1) cones.emplace_back(4240 + x_offset, 270 - 12);
+      platforms.emplace_back("rail", 4300 + x_offset, 245);
+      platforms.emplace_back("platform", 4550 + x_offset, 280);
+
+      platforms.emplace_back("block", 4775 + x_offset, 265);
+      platforms.emplace_back("block", 4950 + x_offset, 225);
+    }
+    else if (current_level == 5) {
+      for (int i = 0; i < 5; i++) {
+        platforms.emplace_back("platform", 150 + (i * 100) + x_offset, 360);
+      }
+      platforms.emplace_back("block", 700 + x_offset, 330);
+      platforms.emplace_back("block", 820 + x_offset, 300);
+      platforms.emplace_back("platform", 950 + x_offset, 270);
+      platforms.emplace_back("block", 1100 + x_offset, 240);
+
+      platforms.emplace_back("rail", 1220 + x_offset, 210);
+      platforms.emplace_back("platform", 1450 + x_offset, 250);
+      if (SDL_rand(2) == 1) cones.emplace_back(1530 + x_offset, 250 - 12);
+      platforms.emplace_back("platform", 1620 + x_offset, 290);
+
+      platforms.emplace_back("block", 1800 + x_offset, 320);
+      platforms.emplace_back("block", 1920 + x_offset, 280);
+      platforms.emplace_back("block", 2040 + x_offset, 240);
+      platforms.emplace_back("block", 2160 + x_offset, 200);
+
+      platforms.emplace_back("rail", 2320 + x_offset, 220);
+      platforms.emplace_back("platform", 2560 + x_offset, 260);
+      if (SDL_rand(3) == 1) cones.emplace_back(2600 + x_offset, 260 - 12);
+      platforms.emplace_back("platform", 2740 + x_offset, 300);
+      if (SDL_rand(3) == 1) cones.emplace_back(2780 + x_offset, 300 - 12);
+      platforms.emplace_back("platform", 2920 + x_offset, 330);
+      if (SDL_rand(3) == 1) cones.emplace_back(2960 + x_offset, 330 - 12);
+
+      platforms.emplace_back("block", 3100 + x_offset, 300);
+      platforms.emplace_back("block", 3220 + x_offset, 270);
+      platforms.emplace_back("platform", 3380 + x_offset, 240);
+      platforms.emplace_back("platform", 3540 + x_offset, 220);
+      if (SDL_rand(2) == 1) cones.emplace_back(3550 + x_offset, 220 - 12);
+
+      platforms.emplace_back("rail", 3740 + x_offset, 220);
+      platforms.emplace_back("platform", 3980 + x_offset, 250);
+      platforms.emplace_back("platform", 4160 + x_offset, 280);
+      platforms.emplace_back("platform", 4340 + x_offset, 310);
+
+      if (SDL_rand(2) == 1) cones.emplace_back(4380 + x_offset, 310 - 12);
+      platforms.emplace_back("block", 4560 + x_offset, 280);
+      platforms.emplace_back("block", 4680 + x_offset, 240);
+    }
+    else if (current_level == 6) {
+      for (int i = 0; i < 5; i++) {
+        platforms.emplace_back("platform", 150 + (i * 100) + x_offset, 350);
+      }
+      platforms.emplace_back("block", 735 + x_offset, 330);
+      platforms.emplace_back("platform", 880 + x_offset, 310);
+      platforms.emplace_back("block", 1040 + x_offset, 280);
+      platforms.emplace_back("platform", 1180 + x_offset, 250);
+      if (SDL_rand(2) == 1) cones.emplace_back(1260 + x_offset, 250 - 12);
+
+      platforms.emplace_back("rail", 1320 + x_offset, 220);
+      platforms.emplace_back("platform", 1560 + x_offset, 260);
+      platforms.emplace_back("block", 1710 + x_offset, 290);
+      platforms.emplace_back("block", 1860 + x_offset, 320);
+      platforms.emplace_back("platform", 2000 + x_offset, 300);
+
+      platforms.emplace_back("block", 2180 + x_offset, 270);
+      platforms.emplace_back("block", 2320 + x_offset, 235);
+      if (SDL_rand(2) == 1) cones.emplace_back(2372 + x_offset, 235 - 12);
+      platforms.emplace_back("platform", 2480 + x_offset, 205);
+      platforms.emplace_back("rail", 2660 + x_offset, 230);
+
+      platforms.emplace_back("platform", 2920 + x_offset, 270);
+      platforms.emplace_back("platform", 3100 + x_offset, 310);
+      if (SDL_rand(2) == 1) cones.emplace_back(3100 + x_offset, 310 - 12);
+      platforms.emplace_back("block", 3260 + x_offset, 300);
+      platforms.emplace_back("block", 3420 + x_offset, 260);
+
+      platforms.emplace_back("platform", 3580 + x_offset, 240);
+      if (SDL_rand(2) == 1) cones.emplace_back(3660 + x_offset, 240 - 12);
+      platforms.emplace_back("platform", 3760 + x_offset, 280);
+      platforms.emplace_back("rail", 3940 + x_offset, 250);
+      platforms.emplace_back("platform", 4200 + x_offset, 310);
+      if (SDL_rand(2) == 1) cones.emplace_back(4205 + x_offset, 310 - 12);
+
+      platforms.emplace_back("block", 4420 + x_offset, 280);
+      platforms.emplace_back("block", 4560 + x_offset, 240);
+      platforms.emplace_back("block", 4690 + x_offset, 220);
     }
   }
 
