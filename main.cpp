@@ -652,6 +652,7 @@ struct Main{
   bool arcade_mode = false;
   int slide = 0;
   int time_lapsed = 0;
+  int time_lapsed_arcade = 0;
   bool finish_reached = false;
   int level = 1; //1, 2, 3, 4 is completion
   int r_beats = 0;
@@ -683,6 +684,24 @@ struct Main{
     SDL_Log("Initializing video mode...");
     SDL_Init(SDL_INIT_VIDEO || SDL_INIT_AUDIO);
     window = SDL_CreateWindow("Skater KENNY.", width, height, SDL_WINDOW_RESIZABLE);
+
+    const char* base_path = SDL_GetBasePath();
+    std::string icon_path = std::string(base_path ? base_path : "") + "Assets/ico.ico";
+    SDL_Surface* icon_surface = SDL_LoadSurface(icon_path.c_str());
+    if (!icon_surface) {
+      SDL_Log("Failed to load window icon '%s': %s", icon_path.c_str(), SDL_GetError());
+      std::string fallback_icon_path = std::string(base_path ? base_path : "") + "Assets/title.png";
+      icon_surface = SDL_LoadPNG(fallback_icon_path.c_str());
+      if (!icon_surface) {
+        SDL_Log("Failed to load fallback window icon '%s': %s", fallback_icon_path.c_str(), SDL_GetError());
+      }
+    }
+    if (icon_surface) {
+      SDL_SetWindowIcon(window, icon_surface);
+      SDL_DestroySurface(icon_surface);
+    }
+    SDL_free(const_cast<char*>(base_path));
+
     renderer = SDL_CreateRenderer(window, "opengl"); //nullptr
     const char* video_driver = SDL_GetCurrentVideoDriver();
     const char* renderer_name = renderer ? SDL_GetRendererName(renderer) : "unknown";
@@ -1129,7 +1148,7 @@ struct Main{
       if (arcade_mode) {
         std::string scoreString = "Score: " + std::to_string(kenny.score);
         std::string sprayString = "Spray Cans: " + std::to_string(kenny.spray_cans);
-        std::string meterString = "Meters: " + std::to_string((int)(kenny.rect.x / 100.0f));
+        std::string meterString = "Meters: " + std::to_string((int)(time_lapsed / 20));
         SDL_SetRenderScale(renderer, 1.4f, 1.4f);
         SDL_RenderDebugText(renderer, 60.0f, 225.0f, scoreString.c_str());
         SDL_RenderDebugText(renderer, 60.0f, 250.0f, sprayString.c_str());
@@ -1140,6 +1159,7 @@ struct Main{
     }
     else if (kenny.state != "win") { // When player is alive
       time_lapsed += 3;
+      time_lapsed_arcade += 3;
       std::string scoreString = "Keep Your Score Low: " + std::to_string(kenny.score);
       SDL_SetRenderScale(renderer, 1.8f, 1.8f);
       SDL_SetRenderDrawColor(renderer, 255, 255, 255, 255);
@@ -1439,6 +1459,7 @@ struct Main{
       transition_timer = 0;
       slide = 0;
       time_lapsed = 0;
+      time_lapsed_arcade = 0;
       finish_reached = false;
       kenny.trick_timer = 0;
       r_beats = 0;
@@ -1826,10 +1847,12 @@ struct Main{
         if (event.key.key == SDLK_S || event.key.key == SDLK_DOWN) {port1.Down = false;}
         if (event.key.key == SDLK_ESCAPE) {port1.Back = false;}
       }
+      /* if you want to be able to take screenshots with the mouse go ahead, uncomment this, it's not like i disabled it because they produce large file size
       if (event.type == SDL_EVENT_MOUSE_BUTTON_DOWN) {
         std::string screenshotPath = "./screenshot_" + std::to_string(SDL_GetTicks()) + ".bmp";
         SaveScreenshot(screenshotPath);
       }
+      */
     }
   }
 };

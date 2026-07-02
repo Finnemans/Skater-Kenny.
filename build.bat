@@ -6,7 +6,10 @@
 
 :: 2. Compile with the -mwindows flag to hide the terminal
 :: Added -O2 for performance and -Wall to see all warnings
-g++.exe main.cpp -o kenny.exe ^
+windres.exe kenny.rc -O coff -o kenny.res
+
+::verander de pad hier voor jouw computer om het te herbouwen, je zou wel SDL3 geïnstalleerd moeten hebben!
+g++.exe main.cpp kenny.res -o kenny.exe ^
   -I"C:\Users\creep\Documents\SDL3-devel-3.4.2-mingw\SDL3-3.4.2\x86_64-w64-mingw32\include" ^
   -I"C:\Users\creep\Documents\SDL3-devel-3.4.2-mingw\SDL3_mixer-3.2.0\include" ^
   -L"C:\Users\creep\Documents\SDL3-devel-3.4.2-mingw\SDL3-3.4.2\x86_64-w64-mingw32\lib" ^
