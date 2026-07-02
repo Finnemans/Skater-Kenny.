@@ -1804,24 +1804,24 @@ struct Main{
         active = false;
       }
       else if (event.type == SDL_EVENT_KEY_DOWN) {
-        if (event.key.key == SDLK_SPACE || event.key.key == SDLK_E || event.key.key == SDLK_A) {port1.A = true;}
+        if (event.key.key == SDLK_SPACE || event.key.key == SDLK_E) {port1.A = true;}
         if (event.key.key == SDLK_Q || event.key.key == SDLK_BACKSPACE) {port1.B = true;}
         if (event.key.key == SDLK_I) {port1.Select = true;}
         if (event.key.key == SDLK_RETURN) {port1.Start = true;}
         if (event.key.key == SDLK_D || event.key.key == SDLK_RIGHT) {port1.Right = true;}
-        if (event.key.key == SDLK_LEFT) {port1.Left = true;}
+        if (event.key.key == SDLK_LEFT || event.key.key == SDLK_A) {port1.Left = true;}
         if (event.key.key == SDLK_W || event.key.key == SDLK_UP) {port1.Up = true;}
         if (event.key.key == SDLK_S || event.key.key == SDLK_DOWN) {port1.Down = true;}
         if (event.key.key == SDLK_P) {kenny.spray_cans ++;}
         if (event.key.key == SDLK_ESCAPE) {port1.Back = true;}
       }
       else if (event.type == SDL_EVENT_KEY_UP) {
-        if (event.key.key == SDLK_SPACE || event.key.key == SDLK_E || event.key.key == SDLK_A) {port1.A = false;}
+        if (event.key.key == SDLK_SPACE || event.key.key == SDLK_E) {port1.A = false;}
         if (event.key.key == SDLK_Q || event.key.key == SDLK_BACKSPACE) {port1.B = false;}
         if (event.key.key == SDLK_I) {port1.Select = false;}
         if (event.key.key == SDLK_RETURN) {port1.Start = false;}
         if (event.key.key == SDLK_D || event.key.key == SDLK_RIGHT) {port1.Right = false;}
-        if (event.key.key == SDLK_LEFT) {port1.Left = false;}
+        if (event.key.key == SDLK_LEFT || event.key.key == SDLK_A) {port1.Left = false;}
         if (event.key.key == SDLK_W || event.key.key == SDLK_UP) {port1.Up = false;}
         if (event.key.key == SDLK_S || event.key.key == SDLK_DOWN) {port1.Down = false;}
         if (event.key.key == SDLK_ESCAPE) {port1.Back = false;}
