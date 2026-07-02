@@ -820,6 +820,19 @@ struct Main{
     SDL_SetRenderViewport(renderer, &viewport);
   }
 
+  bool SaveScreenshot(const std::string& filename) {
+    SDL_Surface* frame = SDL_RenderReadPixels(renderer, nullptr);
+    if (!frame) {
+      SDL_Log("Failed to capture the screen: %s", SDL_GetError());
+      return false;
+    }
+    bool saved = SDL_SaveBMP(frame, filename.c_str()) == 0;
+    if (!saved) SDL_Log("Failed to save screenshot '%s': %s", filename.c_str(), SDL_GetError());
+    else SDL_Log("Saved screenshot to %s", filename.c_str());
+    SDL_DestroySurface(frame);
+    return saved;
+  }
+
   void Update() {
     if (gamestate == 2 && kenny.land_shake_timer > 0.0f) kenny.land_shake_timer -= 1.0f;
     ApplyGameplayViewport();
@@ -994,7 +1007,6 @@ struct Main{
         if (kenny.frame >= 28) SDL_RenderTexture(renderer, kenny_mark.texture, nullptr, &dst);
       }
     }
-    kenny.Update(renderer, platforms, spraycans, cones, finish_reached, mixer, port1);
     int last_platform_x = 0;
     for (auto& platform : platforms) {
       if (platform.type != "building_top") platform.Update(renderer, finish_reached);
@@ -1007,6 +1019,7 @@ struct Main{
     }
     spraycans.erase(std::remove_if(spraycans.begin(), spraycans.end(),[](const SprayCan& s) {
       return s.rect.x + s.rect.w < 0 || s.collected;}), spraycans.end());
+    kenny.Update(renderer, platforms, spraycans, cones, finish_reached, mixer, port1);
     for (auto& cone : cones) {
       cone.Update(renderer, platforms, finish_reached);
     }
@@ -1802,7 +1815,6 @@ struct Main{
         if (event.key.key == SDLK_P) {kenny.spray_cans ++;}
         if (event.key.key == SDLK_ESCAPE) {port1.Back = true;}
       }
-
       else if (event.type == SDL_EVENT_KEY_UP) {
         if (event.key.key == SDLK_SPACE || event.key.key == SDLK_E || event.key.key == SDLK_A) {port1.A = false;}
         if (event.key.key == SDLK_Q || event.key.key == SDLK_BACKSPACE) {port1.B = false;}
@@ -1813,6 +1825,10 @@ struct Main{
         if (event.key.key == SDLK_W || event.key.key == SDLK_UP) {port1.Up = false;}
         if (event.key.key == SDLK_S || event.key.key == SDLK_DOWN) {port1.Down = false;}
         if (event.key.key == SDLK_ESCAPE) {port1.Back = false;}
+      }
+      if (event.type == SDL_EVENT_MOUSE_BUTTON_DOWN) {
+        std::string screenshotPath = "./screenshot_" + std::to_string(SDL_GetTicks()) + ".bmp";
+        SaveScreenshot(screenshotPath);
       }
     }
   }
